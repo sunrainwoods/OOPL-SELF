@@ -26,6 +26,8 @@ struct EnemyUnit {
     float health = 100.0f; // 怪物血量
     float maxHealth = 100.0f;
     float hitCooldownTimerMs = 0.0f; // 被打到的無敵冷卻時間
+    std::shared_ptr<Util::Image> defaultImage; // 原始怪物的圖片
+    std::shared_ptr<Util::Image> hurtImage;    // 全白怪物的圖片
 };
 
 struct ExpGem {
@@ -33,6 +35,13 @@ struct ExpGem {
     glm::vec2 worldPosition = {0.0f, 0.0f};
     bool active = false;
     int expValue = 1;
+    float pickupCooldownTimerMs = 0.0f; // 避免剛掉落就被吃掉的冷卻時間
+};
+
+struct HealthItem {
+    std::shared_ptr<Util::GameObject> object;
+    glm::vec2 worldPosition = {0.0f, 0.0f};
+    bool active = false;
     float pickupCooldownTimerMs = 0.0f; // 避免剛掉落就被吃掉的冷卻時間
 };
 
@@ -112,9 +121,19 @@ private:
 
     int m_EnemiesDefeated = 0; // 記錄擊殺數
     int m_CurrentWave = 1;     // 波次系統
-    
+    int m_CurrentStage = 1;    // 關卡系統
+    float m_GameTimeMs = 0.0f; // 遊戲經過時間
+
     std::vector<ExpGem> m_ExpGems;
     int m_MaxExpGems = 100;
+
+    std::vector<HealthItem> m_HealthItems;
+    int m_MaxHealthItems = 20;
+
+    std::shared_ptr<Util::Image> m_Gem1Image;
+    std::shared_ptr<Util::Image> m_Gem2Image;
+    std::shared_ptr<Util::Image> m_Gem3Image;
+    std::shared_ptr<Util::Image> m_HealthImage;
 };
 
 #endif

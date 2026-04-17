@@ -71,6 +71,8 @@ void App::Start() {
     m_PlayerHitCooldownTimerMs = 0.0f;
     m_EnemiesDefeated = 0;
     m_CurrentWave = 1;
+    m_CurrentStage = 1;
+    m_GameTimeMs = 0.0f;
     m_EnemySpawnIntervalMs = 1200.0f;
 
     m_GroundPath = std::string(RESOURCE_DIR) + "/ground.png";
@@ -123,15 +125,22 @@ void App::Start() {
     // Initialize enemy object pool
     m_Enemies.clear();
     m_Enemies.reserve(m_MaxEnemies);
+    
+    // 預先載入兩張圖片，然後把指標指派給每隻怪物，可以省下很多記憶體
+    auto sharedEnemyImage = std::make_shared<Util::Image>(m_EnemyPath);
+    auto sharedEnemyHurtImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/hurt_enemy1.png");
+
     for (int i = 0; i < m_MaxEnemies; ++i) {
         EnemyUnit enemy;
         enemy.object = std::make_shared<Util::GameObject>();
-        auto enemyImage = std::make_shared<Util::Image>(m_EnemyPath);
-        enemy.object->SetDrawable(enemyImage);
+        enemy.defaultImage = sharedEnemyImage;
+        enemy.hurtImage = sharedEnemyHurtImage;
+        
+        enemy.object->SetDrawable(enemy.defaultImage);
         enemy.object->SetZIndex(4.0f);
         enemy.object->SetVisible(false);
         const float targetEnemyWidth = playerSize.x * m_EnemyWidthRatioToPlayer;
-        const float enemyScale = targetEnemyWidth / enemyImage->GetSize().x;
+        const float enemyScale = targetEnemyWidth / sharedEnemyImage->GetSize().x;
         enemy.object->m_Transform.scale = {enemyScale, enemyScale};
         enemy.active = false;
         enemy.health = enemy.maxHealth;
@@ -141,23 +150,43 @@ void App::Start() {
 
     m_EnemySpawnTimerMs = 0.0f;
 
+    // 載入寶石與道具共用圖片
+    m_Gem1Image = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/Experience_Gem1.png");
+    m_Gem2Image = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/Experience_Gem2.png");
+    m_Gem3Image = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/Experience_Gem3.png");
+    m_HealthImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/check.png");
+
     // Initialize EXP Gem Object Pool
     m_ExpGems.clear();
     m_ExpGems.reserve(m_MaxExpGems);
     for (int i = 0; i < m_MaxExpGems; ++i) {
         ExpGem gem;
         gem.object = std::make_shared<Util::GameObject>();
-        auto gemImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/Experience_Gem1.png");
-        gem.object->SetDrawable(gemImage);
+        gem.object->SetDrawable(m_Gem1Image);
         gem.object->SetZIndex(3.0f); // 繪製在敵人下面，背景上面
         gem.object->SetVisible(false);
-        const float targetGemWidth = playerSize.x * m_ExpGemSizeRatioToPlayer; // 使用控制變數控制寶石大小
-        const float gemScale = targetGemWidth / gemImage->GetSize().x;
-        gem.object->m_Transform.scale = {gemScale, gemScale};
         gem.active = false;
         gem.expValue = 1;
         gem.pickupCooldownTimerMs = 0.0f;
         m_ExpGems.push_back(gem);
+    }
+
+    // Initialize Health Potion Object Pool
+    m_HealthItems.clear();
+    m_HealthItems.reserve(m_MaxHealthItems);
+    for (int i = 0; i < m_MaxHealthItems; ++i) {
+        HealthItem potion;
+        potion.object = std::make_shared<Util::GameObject>();
+        potion.object->SetDrawable(m_HealthImage);
+        potion.object->SetZIndex(3.0f);
+        potion.object->SetVisible(false);
+        
+        const float targetWidth = playerSize.x * m_ExpGemSizeRatioToPlayer;
+        const float itemScale = targetWidth / m_HealthImage->GetSize().x;
+        potion.object->m_Transform.scale = {itemScale, itemScale};
+        potion.active = false;
+        potion.pickupCooldownTimerMs = 0.0f;
+        m_HealthItems.push_back(potion);
     }
 
     // Reset player states
@@ -197,7 +226,8 @@ void App::Update() {
     } else if (moveDir.x > 0.0f) {
         m_IsFacingLeft = false;
     }
-    m_Player->SetFacingLeft(m_IsFacingLeft);
+    // 玩家總無敵時間是 500ms，只要在 > 300ms 期間內顯示一次受擊白圖 (約亮白 200ms) 即可，避免像燈泡一樣閃爍
+    m_Player->SetState(m_IsFacingLeft, m_PlayerHitCooldownTimerMs > 300.0f);
 
     // 解決武器動畫播到一半轉向造成的素材錯誤
     if (m_WeaponEffect.activeAnimation->GetState() == Util::Animation::State::PLAY) {
@@ -243,6 +273,7 @@ void App::Update() {
         (m_PlayerWorldPosition + weaponOffset) - m_CameraPosition;
 
     const float deltaTimeMs = Util::Time::GetDeltaTimeMs();
+    m_GameTimeMs += deltaTimeMs; // 推進遊戲總時間
     m_EnemySpawnTimerMs += deltaTimeMs;
 
     // Object Pool: Count active enemies
@@ -314,7 +345,28 @@ void App::Update() {
 
         if (distanceToPlayer > 0.1f) {
             const glm::vec2 direction = toPlayer / distanceToPlayer;
-            enemy.worldPosition += direction * m_EnemyMoveSpeed * deltaTimeMs;
+            
+            // 加入敵人之間彼此推擠(排斥)的碰撞體積 (簡單的分離力)
+            glm::vec2 separation(0.0f);
+            for (const auto &otherEnemy : m_Enemies) {
+                if (!otherEnemy.active || &enemy == &otherEnemy) continue;
+                
+                glm::vec2 toOther = enemy.worldPosition - otherEnemy.worldPosition;
+                float dist = glm::length(toOther);
+                float minSeparation = playerSize.x * 0.5f; // 以主角體型一半作為怪物碰撞半徑
+
+                // 如果距離太近，產生與之反向的分離力
+                if (dist > 0.0f && dist < minSeparation) {
+                    separation += (toOther / dist) * (minSeparation - dist) * 0.05f; // 大幅降低推擠力道，避免瞬移
+                }
+            }
+
+            // 結合追逐與推擠力，同時限制分離力大小不要超過移動速度太多
+            if (glm::length(separation) > m_EnemyMoveSpeed * 1.5f) {
+                separation = glm::normalize(separation) * (m_EnemyMoveSpeed * 1.5f);
+            }
+
+            enemy.worldPosition += (direction * m_EnemyMoveSpeed + separation) * deltaTimeMs;
         }
 
         enemy.object->m_Transform.translation =
@@ -346,16 +398,57 @@ void App::Update() {
                         // 擊殺統計與波次更新
                         m_EnemiesDefeated++;
                         m_CurrentWave = (m_EnemiesDefeated / 15) + 1;
+                        m_CurrentStage = (m_CurrentWave - 1) / 5 + 1; // 每 5 波 (75隻敵人) 推進一關
                         m_EnemySpawnIntervalMs = std::max(200.0f, 1200.0f - static_cast<float>(m_CurrentWave - 1) * 100.0f); // 生成速度隨波次加快
 
-                        // 掉落經驗值寶石
+                        static std::mt19937 dropRng(std::random_device{}());
+                        std::uniform_real_distribution<float> dropDist(0.0f, 100.0f);
+                        float dropRoll = dropDist(dropRng);
+
+                        // 掉落經驗值寶石 (依機率決定掉落哪一種)
                         for (auto &gem : m_ExpGems) {
                             if (!gem.active) {
                                 gem.active = true;
                                 gem.worldPosition = enemy.worldPosition;
-                                gem.pickupCooldownTimerMs = 800.0f; // 0.8 秒掉落冷卻，防秒吃
+                                gem.pickupCooldownTimerMs = 800.0f; // 0.8 秒掉落冷卻
+                                
+                                std::shared_ptr<Util::Image> selectedImage;
+                                if (dropRoll < 5.0f) {
+                                    // 5% 機率掉落 Experience_Gem3 (最高經驗值)
+                                    gem.expValue = 10;
+                                    selectedImage = m_Gem3Image;
+                                } else if (dropRoll < 25.0f) {
+                                    // 20% 機率掉落 Experience_Gem2 (中等經驗值)
+                                    gem.expValue = 3;
+                                    selectedImage = m_Gem2Image;
+                                } else {
+                                    // 75% 機率掉落 Experience_Gem1 (最低經驗值)
+                                    gem.expValue = 1;
+                                    selectedImage = m_Gem1Image;
+                                }
+                                
+                                gem.object->SetDrawable(selectedImage);
+                                
+                                // 依據所選圖片與玩家比例重新設定大小
+                                const float targetWidth = playerSize.x * m_ExpGemSizeRatioToPlayer;
+                                const float imgScale = targetWidth / selectedImage->GetSize().x;
+                                gem.object->m_Transform.scale = {imgScale, imgScale};
                                 gem.object->SetVisible(true);
                                 break;
+                            }
+                        }
+
+                        // 3% 機率掉落補血道具 (check.png)
+                        if (dropDist(dropRng) < 3.0f) {
+                            for (auto &potion : m_HealthItems) {
+                                if (!potion.active) {
+                                    potion.active = true;
+                                    // 稍微往旁邊偏移一點，避免跟寶石完全重疊
+                                    potion.worldPosition = enemy.worldPosition + glm::vec2(20.0f, 20.0f);
+                                    potion.pickupCooldownTimerMs = 800.0f;
+                                    potion.object->SetVisible(true);
+                                    break;
+                                }
                             }
                         }
                     }
@@ -392,6 +485,23 @@ void App::Update() {
             }
             // 更新寶石位置
             gem.object->m_Transform.translation = gem.worldPosition - m_CameraPosition;
+        }
+    }
+
+    // 處理補血道具的掉落冷卻與拾取
+    for (auto &potion : m_HealthItems) {
+        if (potion.active) {
+            if (potion.pickupCooldownTimerMs > 0.0f) {
+                potion.pickupCooldownTimerMs -= deltaTimeMs;
+            } else {
+                float dist = glm::distance(m_PlayerWorldPosition, potion.worldPosition);
+                if (dist <= pickupRadius) {
+                    m_PlayerHealth = m_PlayerMaxHealth;
+                    potion.active = false;
+                    potion.object->SetVisible(false);
+                }
+            }
+            potion.object->m_Transform.translation = potion.worldPosition - m_CameraPosition;
         }
     }
 
@@ -437,7 +547,7 @@ void App::Update() {
 
     // =============== UI 繪製區 ===============
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(300, 100), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(500, 100), ImGuiCond_Always); // 增加寬度以避免時間被裁切
     ImGui::Begin("Player Status", nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground |
                  ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoMove);
@@ -467,11 +577,22 @@ void App::Update() {
                             IM_COL32(230, 40, 40, 255));
 
 
+    // 格式化遊戲時間 (時:分:秒)
+    int timeHours = static_cast<int>(m_GameTimeMs / 3600000.0f);
+    int timeMinutes = static_cast<int>(m_GameTimeMs / 60000.0f) % 60;
+    int timeSeconds = static_cast<int>(m_GameTimeMs / 1000.0f) % 60;
+
     // 在畫面正上方畫經驗條與等級波次
     ImGui::SetCursorPos(ImVec2(10, 10));
-    ImGui::TextColored(ImVec4(1, 1, 0, 1), "Level %d", m_PlayerLevel);
+    ImGui::TextColored(ImVec4(1, 1, 0, 1), "Lv %d", m_PlayerLevel);
     ImGui::SameLine();
-    ImGui::TextColored(ImVec4(1, 1, 1, 1), "  |  Wave %d", m_CurrentWave);
+    ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), " | Stage %d", m_CurrentStage);
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(1, 1, 1, 1), " | Wave %d", m_CurrentWave);
+    ImGui::SameLine();
+    
+    // 一律顯示 時:分:秒
+    ImGui::TextColored(ImVec4(0.8f, 0.8f, 1.0f, 1.0f), " | Time %02d:%02d:%02d", timeHours, timeMinutes, timeSeconds);
 
     ImGui::ProgressBar((float)m_PlayerExp / m_PlayerExpNext, ImVec2(280, 20), "EXP");
 
@@ -519,31 +640,32 @@ void App::DrawGameObjects() {
             }
         }
     }
+    for (auto &potion : m_HealthItems) {
+        if (potion.active) {
+            if (std::abs(potion.worldPosition.x - m_CameraPosition.x) < cullDistX &&
+                std::abs(potion.worldPosition.y - m_CameraPosition.y) < cullDistY) {
+                potion.object->Draw();
+            }
+        }
+    }
     for (auto &enemy : m_Enemies) {
         if (enemy.active) {
             if (std::abs(enemy.worldPosition.x - m_CameraPosition.x) < cullDistX &&
                 std::abs(enemy.worldPosition.y - m_CameraPosition.y) < cullDistY) {
                 
-                // 受擊閃爍特效 (每 100ms 閃爍一次)
-                if (enemy.hitCooldownTimerMs > 0.0f) {
-                    if (static_cast<int>(enemy.hitCooldownTimerMs / 100.0f) % 2 == 0) {
-                        enemy.object->Draw();
-                    }
+                // 受擊閃爍特效改為「實體白化」: 只要還處於冷卻時間的前半段 (大於 150ms，因為總共是 300ms) 就顯示白圖，給出單次閃爍的感覺
+                if (enemy.hitCooldownTimerMs > 150.0f) {
+                    enemy.object->SetDrawable(enemy.hurtImage);
                 } else {
-                    enemy.object->Draw();
+                    enemy.object->SetDrawable(enemy.defaultImage);
                 }
+                enemy.object->Draw();
             }
         }
     }
-    
-    // 玩家受擊閃爍特效 (每 50ms 閃爍一次)
-    if (m_PlayerHitCooldownTimerMs > 0.0f) {
-        if (static_cast<int>(m_PlayerHitCooldownTimerMs / 50.0f) % 2 == 0) {
-            m_Player->Draw();
-        }
-    } else {
-        m_Player->Draw();
-    }
+
+    // 玩家受擊特效已在 UpdateStart() 透過 SetState() 切換圖片，這裡一律畫出來
+    m_Player->Draw();
     
     m_WeaponEffect.object->Draw();
 }
@@ -623,8 +745,17 @@ void App::UpdateGameOver() {
 
     ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "YOU DIED");
     ImGui::Text("Level Reached:     %d", m_PlayerLevel);
+    ImGui::Text("Stage Reached:     %d", m_CurrentStage);
     ImGui::Text("Enemies Defeated:  %d", m_EnemiesDefeated);
     ImGui::Text("Waves Survived:    %d", m_CurrentWave);
+
+    int timeHours = static_cast<int>(m_GameTimeMs / 3600000.0f);
+    int timeMinutes = static_cast<int>(m_GameTimeMs / 60000.0f) % 60;
+    int timeSeconds = static_cast<int>(m_GameTimeMs / 1000.0f) % 60;
+    
+    // 一律顯示 時:分:秒
+    ImGui::Text("Time Survived:     %02d:%02d:%02d", timeHours, timeMinutes, timeSeconds);
+    
     ImGui::Separator();
     ImGui::Dummy(ImVec2(0, 20));
 
