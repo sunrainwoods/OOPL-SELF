@@ -25,6 +25,8 @@ struct EnemyUnit {
     bool active = false; // Add active flag for Object Pool
     float health = 100.0f; // 怪物血量
     float maxHealth = 100.0f;
+    float speed = 100.0f; // 怪物移速
+    float damage = 10.0f; // 怪物攻擊力
     float hitCooldownTimerMs = 0.0f; // 被打到的無敵冷卻時間
     std::shared_ptr<Util::Image> defaultImage; // 原始怪物的圖片
     std::shared_ptr<Util::Image> hurtImage;    // 全白怪物的圖片
@@ -43,6 +45,27 @@ struct HealthItem {
     glm::vec2 worldPosition = {0.0f, 0.0f};
     bool active = false;
     float pickupCooldownTimerMs = 0.0f; // 避免剛掉落就被吃掉的冷卻時間
+};
+
+struct Knife {
+    std::shared_ptr<Util::GameObject> object;
+    glm::vec2 worldPosition = {0.0f, 0.0f};
+    glm::vec2 velocity = {0.0f, 0.0f};
+    bool active = false;
+    float timeToLiveMs = 0.0f;
+    float angle = 0.0f; // 用於旋轉圖片
+};
+
+struct Runetracer {
+    std::shared_ptr<Util::GameObject> object;
+    glm::vec2 worldPosition = {0.0f, 0.0f};
+    glm::vec2 velocity = {0.0f, 0.0f};
+    bool active = false;
+    float timeToLiveMs = 0.0f;
+    float angle = 0.0f;
+    
+    std::vector<glm::vec2> historyPositions;
+    int maxHistory = 40; // 加長尾流
 };
 
 class App {
@@ -100,6 +123,30 @@ private:
     bool m_IsFacingLeft = false;
     float m_WeaponAttackTimerMs = 0.0f;
     float m_WeaponAttackIntervalMs = 1000.0f;
+    
+    // 飛刀武器相關變數
+    std::vector<Knife> m_Knives;
+    int m_MaxKnives = 50;
+    std::shared_ptr<Util::Image> m_KnifeImage;
+    float m_KnifeAttackIntervalMs = 800.0f;
+    float m_KnifeAttackTimerMs = 0.0f;
+    float m_KnifeSpeed = 600.0f;
+    float m_KnifeDamage = 25.0f;
+    glm::vec2 m_PlayerLastMoveDir = {1.0f, 0.0f};
+
+    // 符文追蹤者武器相關變數
+    std::vector<Runetracer> m_Runetracers;
+    int m_MaxRunetracers = 30;
+    std::shared_ptr<Util::Image> m_RunetracerImage;
+    std::shared_ptr<Util::Image> m_RunetracerImage95;
+    std::shared_ptr<Util::Image> m_RunetracerImage80;
+    std::shared_ptr<Util::Image> m_RunetracerImage65;
+    std::shared_ptr<Util::Image> m_RunetracerImage50;
+    float m_RunetracerAttackIntervalMs = 1500.0f;
+    float m_RunetracerAttackTimerMs = 0.0f;
+    float m_RunetracerSpeed = 400.0f;
+    float m_RunetracerDamage = 15.0f;
+
     float m_PlayerScale = 0.7f;
     float m_WeaponWidthRatioToPlayer = 1.5f;
 
@@ -130,10 +177,20 @@ private:
     std::vector<HealthItem> m_HealthItems;
     int m_MaxHealthItems = 20;
 
+    std::shared_ptr<Util::Image> m_Enemy1Image;
+    std::shared_ptr<Util::Image> m_Enemy1HurtImage;
+    std::shared_ptr<Util::Image> m_Enemy2Image;
+    std::shared_ptr<Util::Image> m_Enemy2HurtImage;
+    std::shared_ptr<Util::Image> m_Enemy3Image;
+    std::shared_ptr<Util::Image> m_Enemy3HurtImage;
+
     std::shared_ptr<Util::Image> m_Gem1Image;
     std::shared_ptr<Util::Image> m_Gem2Image;
     std::shared_ptr<Util::Image> m_Gem3Image;
     std::shared_ptr<Util::Image> m_HealthImage;
+
+    std::shared_ptr<Util::Image> m_LevelUpImage;
+    std::shared_ptr<Util::GameObject> m_LevelUpObject;
 };
 
 #endif
