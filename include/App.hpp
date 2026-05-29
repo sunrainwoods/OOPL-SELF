@@ -30,6 +30,7 @@ struct EnemyUnit {
     float hitCooldownTimerMs = 0.0f; // 被打到的無敵冷卻時間
     std::shared_ptr<Util::Image> defaultImage; // 原始怪物的圖片
     std::shared_ptr<Util::Image> hurtImage;    // 全白怪物的圖片
+    bool isBoss = false;
 };
 
 struct ExpGem {
@@ -131,7 +132,7 @@ private:
     float m_KnifeAttackIntervalMs = 800.0f;
     float m_KnifeAttackTimerMs = 0.0f;
     float m_KnifeSpeed = 600.0f;
-    float m_KnifeDamage = 25.0f;
+    float m_KnifeDamage = 50.0f; // 提升飛刀傷害加快節奏
     glm::vec2 m_PlayerLastMoveDir = {1.0f, 0.0f};
 
     // 符文追蹤者武器相關變數
@@ -145,7 +146,7 @@ private:
     float m_RunetracerAttackIntervalMs = 1500.0f;
     float m_RunetracerAttackTimerMs = 0.0f;
     float m_RunetracerSpeed = 400.0f;
-    float m_RunetracerDamage = 15.0f;
+    float m_RunetracerDamage = 35.0f; // 提升符文傷害加快節奏
 
     float m_PlayerScale = 0.7f;
     float m_WeaponWidthRatioToPlayer = 1.5f;
@@ -158,18 +159,19 @@ private:
     std::string m_EnemyPath;
     float m_EnemySpawnTimerMs = 0.0f;
     float m_EnemySpawnIntervalMs = 1200.0f;
-    int m_MaxEnemies = 30;
+    int m_MaxEnemies = 5000; // 擴大預設的池容量上限，配合壓力測試
     float m_EnemySpawnMinDistance = 450.0f;
     float m_EnemySpawnMaxDistance = 850.0f;
     float m_EnemyMoveSpeed = 0.12f;
     float m_EnemyWidthRatioToPlayer = 0.85f;
-    float m_WeaponDamage = 35.0f; // 武器傷害
+    float m_WeaponDamage = 70.0f; // 提升近戰揮砍傷害加快節奏
     float m_ExpGemSizeRatioToPlayer = 0.6f; // 寶石大小比例
 
     int m_EnemiesDefeated = 0; // 記錄擊殺數
     int m_CurrentWave = 1;     // 波次系統
     int m_CurrentStage = 1;    // 關卡系統
     float m_GameTimeMs = 0.0f; // 遊戲經過時間
+    int m_LastSpecialWaveTriggered = 0; // 紀錄已觸發的小王波數
 
     std::vector<ExpGem> m_ExpGems;
     int m_MaxExpGems = 100;
@@ -183,6 +185,12 @@ private:
     std::shared_ptr<Util::Image> m_Enemy2HurtImage;
     std::shared_ptr<Util::Image> m_Enemy3Image;
     std::shared_ptr<Util::Image> m_Enemy3HurtImage;
+    std::shared_ptr<Util::Image> m_Enemy4Image;
+    std::shared_ptr<Util::Image> m_Enemy4HurtImage;
+    std::shared_ptr<Util::Image> m_BossLeftImage;
+    std::shared_ptr<Util::Image> m_BossRightImage;
+    std::shared_ptr<Util::Image> m_BossHurtLeftImage;
+    std::shared_ptr<Util::Image> m_BossHurtRightImage;
 
     std::shared_ptr<Util::Image> m_Gem1Image;
     std::shared_ptr<Util::Image> m_Gem2Image;

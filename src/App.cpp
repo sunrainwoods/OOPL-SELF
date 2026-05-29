@@ -133,6 +133,12 @@ void App::Start() {
     m_Enemy2HurtImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/hurt_enemy2.png");
     m_Enemy3Image = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/enemy3.png");
     m_Enemy3HurtImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/hurt_enemy3.png");
+    m_Enemy4Image = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/enemy4.png");
+    m_Enemy4HurtImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/hurt_enemy4.png");
+    m_BossLeftImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/boss_left1.png");
+    m_BossRightImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/boss_right1.png");
+    m_BossHurtLeftImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/hurt_boss_left1.png");
+    m_BossHurtRightImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/hurt_boss_right1.png");
 
     for (int i = 0; i < m_MaxEnemies; ++i) {
         EnemyUnit enemy;
@@ -257,6 +263,11 @@ void App::Start() {
     m_PlayerExp = 0;
     m_PlayerExpNext = 10;
     m_PlayerHitCooldownTimerMs = 0.0f;
+    m_CurrentWave = 1;
+    m_CurrentStage = 1;
+    m_EnemiesDefeated = 0;
+    m_GameTimeMs = 0.0f;
+    m_LastSpecialWaveTriggered = 0;
 
     m_CurrentState = State::UPDATE;
 }
@@ -276,7 +287,8 @@ void App::Update() {
         moveDir.x += 1.0f;
     }
 
-    if (moveDir.x != 0.0f || moveDir.y != 0.0f) {
+    bool isMoving = moveDir.x != 0.0f || moveDir.y != 0.0f;
+    if (isMoving) {
         constexpr float kMoveSpeed = 0.35f; // pixels per millisecond
         moveDir = glm::normalize(moveDir);
         m_PlayerLastMoveDir = moveDir; // 更新飛行武器的方向
@@ -290,7 +302,7 @@ void App::Update() {
         m_IsFacingLeft = false;
     }
     // 玩家總無敵時間是 500ms，只要在 > 300ms 期間內顯示一次受擊白圖 (約亮白 200ms) 即可，避免像燈泡一樣閃爍
-    m_Player->SetState(m_IsFacingLeft, m_PlayerHitCooldownTimerMs > 300.0f);
+    m_Player->SetState(m_IsFacingLeft, isMoving, m_PlayerHitCooldownTimerMs > 300.0f);
 
     // 解決武器動畫播到一半轉向造成的素材錯誤
     if (m_WeaponEffect.activeAnimation->GetState() == Util::Animation::State::PLAY) {
@@ -452,12 +464,29 @@ void App::Update() {
     m_GameTimeMs += deltaTimeMs; // 推進遊戲總時間
     m_EnemySpawnTimerMs += deltaTimeMs;
 
-    // Object Pool: Count active enemies
-    int activeEnemyCount = 0;
-    for (const auto &enemy : m_Enemies) {
+    // Object Pool: Build a list of active enemies to drastically reduce loop iterations later
+    std::vector<EnemyUnit*> activeEnemies;
+    activeEnemies.reserve(m_Enemies.size());
+    for (auto &enemy : m_Enemies) {
         if (enemy.active) {
-            activeEnemyCount++;
+            activeEnemies.push_back(&enemy);
         }
+    }
+    int activeEnemyCount = static_cast<int>(activeEnemies.size());
+    
+    // 【空間分割 (Spatial HashingGrid)】: 用於快速查找附近敵人
+    const float CELL_SIZE = 150.0f; // 格子大小至少要大於最大怪物的直徑
+    std::unordered_map<int64_t, std::vector<EnemyUnit*>> grid;
+    
+    auto getGridKey = [CELL_SIZE](const glm::vec2& pos) -> int64_t {
+        int cx = static_cast<int>(std::floor(pos.x / CELL_SIZE));
+        int cy = static_cast<int>(std::floor(pos.y / CELL_SIZE));
+        return (static_cast<int64_t>(cx) << 32) | (cy & 0xFFFFFFFF);
+    };
+
+    // 將所有活著的怪放入 Grid 中
+    for (auto *enemyPtr : activeEnemies) {
+        grid[getGridKey(enemyPtr->worldPosition)].push_back(enemyPtr);
     }
 
     if (m_EnemySpawnTimerMs >= m_EnemySpawnIntervalMs &&
@@ -470,6 +499,78 @@ void App::Update() {
         std::uniform_real_distribution<float> distanceDist(
             m_EnemySpawnMinDistance, m_EnemySpawnMaxDistance);
 
+        // 特殊波次生成 (每 5 波觸發一次)
+        if (m_CurrentWave > 0 && m_CurrentWave % 5 == 0 && m_LastSpecialWaveTriggered != m_CurrentWave) {
+            m_LastSpecialWaveTriggered = m_CurrentWave;
+            
+            // 生成 Boss
+            bool bossSpawned = false;
+            for (auto &enemy : m_Enemies) {
+                if (!enemy.active) {
+                    enemy.active = true;
+                    enemy.isBoss = true;
+                    
+                    float angle = angleDist(rng);
+                    float bossDist = m_EnemySpawnMaxDistance * 0.8f;
+                    enemy.worldPosition = m_PlayerWorldPosition + glm::vec2{std::cos(angle), std::sin(angle)} * bossDist;
+                    
+                    enemy.defaultImage = m_BossLeftImage;
+                    enemy.hurtImage = m_BossHurtLeftImage;
+                    enemy.speed = 30.0f; // Boss走比較慢
+                    enemy.damage = 60.0f;
+                    enemy.maxHealth = 2000.0f + static_cast<float>(m_CurrentWave) * 200.0f;
+                    enemy.health = enemy.maxHealth;
+                    enemy.hitCooldownTimerMs = 0.0f;
+                    
+                    enemy.object->SetDrawable(enemy.defaultImage);
+                    enemy.object->SetZIndex(4.2f);
+                    
+                    const float targetEnemyWidth = m_Player->GetScaledSize().x * 3.0f; // Boss很大
+                    const float enemyScale = targetEnemyWidth / enemy.defaultImage->GetSize().x;
+                    enemy.object->m_Transform.scale = {enemyScale, enemyScale};
+                    enemy.object->SetVisible(true);
+                    
+                    bossSpawned = true;
+                    break;
+                }
+            }
+            
+            // 畫一個圈圈生成 enemy4
+            if (bossSpawned) {
+                int specialEnemyCount = 60; // 將數量提升至 60 隻，讓圈更密集
+                float circleRadius = m_EnemySpawnMaxDistance * 1.5f; // 生成在比王更遠的圓圈上
+                for (int i = 0; i < specialEnemyCount; ++i) {
+                    // Find available enemy
+                    for (auto &enemy : m_Enemies) {
+                        if (!enemy.active) {
+                            enemy.active = true;
+                            enemy.isBoss = false;
+                            
+                            float angle = (glm::two_pi<float>() / specialEnemyCount) * i;
+                            enemy.worldPosition = m_PlayerWorldPosition + glm::vec2{std::cos(angle), std::sin(angle)} * circleRadius;
+                            
+                            enemy.defaultImage = m_Enemy4Image;
+                            enemy.hurtImage = m_Enemy4HurtImage;
+                            enemy.speed = 40.0f; // 慢慢包圍
+                            enemy.damage = 40.0f;
+                            enemy.maxHealth = 400.0f + static_cast<float>(m_CurrentWave) * 50.0f;
+                            enemy.health = enemy.maxHealth;
+                            enemy.hitCooldownTimerMs = 0.0f;
+                            
+                            enemy.object->SetDrawable(enemy.defaultImage);
+                            enemy.object->SetZIndex(4.1f);
+                            
+                            const float targetEnemyWidth = m_Player->GetScaledSize().x * 1.2f;
+                            const float enemyScale = targetEnemyWidth / enemy.defaultImage->GetSize().x;
+                            enemy.object->m_Transform.scale = {enemyScale, enemyScale};
+                            enemy.object->SetVisible(true);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
         const float angle = angleDist(rng);
         const float distance = distanceDist(rng);
         const glm::vec2 spawnOffset =
@@ -479,6 +580,7 @@ void App::Update() {
         for (auto &enemy : m_Enemies) {
             if (!enemy.active) {
                 enemy.active = true;
+                enemy.isBoss = false;
                 enemy.worldPosition = m_PlayerWorldPosition + spawnOffset;
                 
                 // 決定要生哪一種敵人
@@ -533,7 +635,8 @@ void App::Update() {
         m_PlayerHitCooldownTimerMs -= deltaTimeMs;
     }
 
-    for (auto &enemy : m_Enemies) {
+    for (auto* enemyPtr : activeEnemies) {
+        auto &enemy = *enemyPtr;
         if (!enemy.active) {
             continue;
         }
@@ -549,7 +652,9 @@ void App::Update() {
         // 給予不同體型對應的碰撞半徑 (用來判定傷害與碰撞)
         float enemyCollisionRadius = enemy.object->GetScaledSize().x * 0.35f;
         float playerCollisionRadius = playerSize.x * 0.35f;
-        float damageHitRadius = playerCollisionRadius + enemyCollisionRadius * 0.5f;
+        
+        // 將受傷判定半徑與實體碰撞半徑一致，防止被推開而無法受傷
+        float damageHitRadius = playerCollisionRadius + enemyCollisionRadius;
 
         // 如果距離太近，玩家扣血
         if (distanceToPlayer < damageHitRadius && m_PlayerHitCooldownTimerMs <= 0.0f) {
@@ -567,20 +672,39 @@ void App::Update() {
             
             // 加入敵人之間彼此推擠(排斥)的碰撞體積 (簡單的分離力)
             glm::vec2 separation(0.0f);
-            for (const auto &otherEnemy : m_Enemies) {
-                if (!otherEnemy.active || &enemy == &otherEnemy) continue;
-                
-                glm::vec2 toOther = enemy.worldPosition - otherEnemy.worldPosition;
-                float dist = glm::length(toOther);
-                
-                // 動態取得兩隻怪物的碰撞半徑總和
-                float otherRadius = otherEnemy.object->GetScaledSize().x * 0.35f;
-                float minSeparation = enemyCollisionRadius + otherRadius; 
+            
+            // 找出自身所在的格子與周圍 8 宮格
+            int cx = static_cast<int>(std::floor(enemy.worldPosition.x / CELL_SIZE));
+            int cy = static_cast<int>(std::floor(enemy.worldPosition.y / CELL_SIZE));
+            
+            for (int dx = -1; dx <= 1; ++dx) {
+                for (int dy = -1; dy <= 1; ++dy) {
+                    int64_t key = (static_cast<int64_t>(cx + dx) << 32) | ((cy + dy) & 0xFFFFFFFF);
+                    auto it = grid.find(key);
+                    if (it != grid.end()) {
+                        for (const auto *otherEnemyPtr : it->second) {
+                            const auto &otherEnemy = *otherEnemyPtr;
+                            if (!otherEnemy.active || &enemy == &otherEnemy) continue;
+                            
+                            glm::vec2 toOther = enemy.worldPosition - otherEnemy.worldPosition;
+                            
+                            float otherRadius = otherEnemy.object->GetScaledSize().x * 0.35f;
+                            float minSeparation = enemyCollisionRadius + otherRadius; 
 
-                // 如果距離太近，產生與之反向的分離推移量
-                if (dist > 0.0f && dist < minSeparation) {
-                    // 推擠量與重疊程度成正比
-                    separation += (toOther / dist) * (minSeparation - dist) * 0.4f; 
+                            // 【AABB 快速過濾 (Manhattan Distance)】省去大量不必要的 length 計算
+                            if (std::abs(toOther.x) > minSeparation || std::abs(toOther.y) > minSeparation) {
+                                continue; 
+                            }
+
+                            float dist = glm::length(toOther);
+
+                            // 如果距離太近，產生與之反向的分離推移量
+                            if (dist > 0.0f && dist < minSeparation) {
+                                // 推擠量與重疊程度成正比
+                                separation += (toOther / dist) * (minSeparation - dist) * 0.4f; 
+                            }
+                        }
+                    }
                 }
             }
 
@@ -598,6 +722,22 @@ void App::Update() {
             // 限制單幀最大推擠位移，避免因疊加力量導致瞬移出界
             if (glm::length(separation) > 10.0f) {
                 separation = glm::normalize(separation) * 10.0f;
+            }
+
+            // 若為 Boss，根據移動方向切換左右圖片
+            if (enemy.isBoss) {
+                if (direction.x < 0.0f) {
+                    enemy.defaultImage = m_BossLeftImage;
+                    enemy.hurtImage = m_BossHurtLeftImage;
+                } else {
+                    enemy.defaultImage = m_BossRightImage;
+                    enemy.hurtImage = m_BossHurtRightImage;
+                }
+                
+                // 如果沒有處於受傷狀態，立即更新為對應的 defaultImage
+                if (enemy.hitCooldownTimerMs <= 0.0f) {
+                    enemy.object->SetDrawable(enemy.defaultImage);
+                }
             }
 
             // 更新敵人位置 (速度為 pixel per second, 所以乘上 deltaTimeMs/1000.0f)
@@ -621,10 +761,15 @@ void App::Update() {
         const glm::vec2 weaponHitCenter = m_PlayerWorldPosition + weaponOffset;
         const float hitRadius =
             playerSize.x * m_WeaponHitRadiusRatioToPlayer;
+        const float hitRadiusSq = hitRadius * hitRadius;
 
-        for (auto &enemy : m_Enemies) {
+        for (auto *enemyPtr : activeEnemies) {
+            auto &enemy = *enemyPtr;
             if (enemy.active && enemy.hitCooldownTimerMs <= 0.0f) {
-                if (glm::distance(enemy.worldPosition, weaponHitCenter) <= hitRadius) {
+                float dx = enemy.worldPosition.x - weaponHitCenter.x;
+                float dy = enemy.worldPosition.y - weaponHitCenter.y;
+
+                if ((dx * dx + dy * dy) <= hitRadiusSq) {
                     enemy.hitCooldownTimerMs = 300.0f; // 武器冷卻：同一次揮擊只受傷一次
                     enemy.health -= m_WeaponDamage;
                     if (enemy.health <= 0.0f) {
@@ -699,12 +844,16 @@ void App::Update() {
 
         const float knifeHitRadius = playerSize.x * 0.4f * 0.5f;
 
-        for (auto& enemy : m_Enemies) {
+        for (auto* enemyPtr : activeEnemies) {
+            auto& enemy = *enemyPtr;
             if (enemy.active && enemy.hitCooldownTimerMs <= 0.0f) {
                 float enemyCollisionRadius = enemy.object->GetScaledSize().x * 0.35f;
                 float hitRadius = knifeHitRadius + enemyCollisionRadius;
 
-                if (glm::distance(enemy.worldPosition, knife.worldPosition) <= hitRadius) {
+                float dx = enemy.worldPosition.x - knife.worldPosition.x;
+                float dy = enemy.worldPosition.y - knife.worldPosition.y;
+
+                if ((dx * dx + dy * dy) <= hitRadius * hitRadius) {
                     enemy.hitCooldownTimerMs = 300.0f;
                     enemy.health -= m_KnifeDamage;
                     
@@ -783,12 +932,16 @@ void App::Update() {
 
         const float runeHitRadius = playerSize.x * 0.5f * 0.5f;
 
-        for (auto& enemy : m_Enemies) {
+        for (auto* enemyPtr : activeEnemies) {
+            auto& enemy = *enemyPtr;
             if (enemy.active && enemy.hitCooldownTimerMs <= 0.0f) {
                 float enemyCollisionRadius = enemy.object->GetScaledSize().x * 0.35f;
                 float hitRadius = runeHitRadius + enemyCollisionRadius;
 
-                if (glm::distance(enemy.worldPosition, rune.worldPosition) <= hitRadius) {
+                float dx = enemy.worldPosition.x - rune.worldPosition.x;
+                float dy = enemy.worldPosition.y - rune.worldPosition.y;
+
+                if ((dx * dx + dy * dy) <= hitRadius * hitRadius) {
                     enemy.hitCooldownTimerMs = 300.0f; // 擊中冷卻
                     enemy.health -= m_RunetracerDamage;
                     
@@ -1088,6 +1241,7 @@ void App::DrawGameObjects() {
                 
                 // 根據要求，殘影全部改成使用 Runetracer65
                 rune.object->SetDrawable(m_RunetracerImage65);
+                rune.object->SetZIndex(4.4f - (i * 0.01f));
 
                 rune.object->m_Transform.translation = rune.historyPositions[i] - m_CameraPosition;
                 rune.object->m_Transform.scale = {trailScale, trailScale};
@@ -1096,6 +1250,7 @@ void App::DrawGameObjects() {
             
             // 繪製完殘影後，將圖片換回預設 100% 準備畫本體
             rune.object->SetDrawable(m_RunetracerImage);
+            rune.object->SetZIndex(4.5f);
             
             // 繪製本體
             if (std::abs(rune.worldPosition.x - m_CameraPosition.x) < cullDistX &&
