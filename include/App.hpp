@@ -6,6 +6,7 @@
 #include "Util/Animation.hpp"
 #include "Util/GameObject.hpp"
 #include "Util/Image.hpp"
+#include "Util/BGM.hpp"
 
 struct BackgroundTile {
     std::shared_ptr<Util::GameObject> object;
@@ -199,6 +200,11 @@ private:
 
     std::shared_ptr<Util::Image> m_LevelUpImage;
     std::shared_ptr<Util::GameObject> m_LevelUpObject;
+
+    std::shared_ptr<Util::Image> m_PauseIconImage;
+    std::shared_ptr<Util::Image> m_EnemyCountIconImage;
+
+    std::shared_ptr<Util::BGM> m_BGM;
 };
 
 #endif

@@ -180,6 +180,19 @@ void App::Start() {
     const float levelUpScale = static_cast<float>(WINDOW_HEIGHT) / m_LevelUpImage->GetSize().y * 0.9f;
     m_LevelUpObject->m_Transform.scale = {levelUpScale, levelUpScale};
 
+    m_PauseIconImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/pause_icon.png");
+    m_EnemyCountIconImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/enemy_count_icon.png");
+
+    // 嘗試載入背景音樂 (可以隨意替換檔名)
+    // 請將你要播放的音樂放到 Resources 資料夾，並叫做 bgm.mp3
+    try {
+        m_BGM = std::make_shared<Util::BGM>(std::string(RESOURCE_DIR) + "/bgm.mp3");
+        m_BGM->SetVolume(50); // 音量 0~128
+        m_BGM->Play(-1);      // -1 表示無限循環
+    } catch (...) {
+        // 如果沒有音樂檔案則略過不播放，避免程式崩潰
+    }
+
     // Initialize EXP Gem Object Pool
     m_ExpGems.clear();
     m_ExpGems.reserve(m_MaxExpGems);
@@ -1093,26 +1106,32 @@ void App::Update() {
     DrawGameObjects();
 
     // =============== UI 繪製區 ===============
-    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(500, 100), ImGuiCond_Always); // 增加寬度以避免時間被裁切
-    ImGui::Begin("Player Status", nullptr,
-                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground |
-                 ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoMove);
+    // 取得 ImGui 背景畫布來畫進度條與血條
+    ImDrawList* drawList = ImGui::GetBackgroundDrawList();
 
-    // 玩家進度條
+    // 1. 最上方的經驗值條
+    float expRatio = std::clamp((float)m_PlayerExp / m_PlayerExpNext, 0.0f, 1.0f);
+    float expBarHeight = 24.0f;
+    float expBarWidth = WINDOW_WIDTH - 80.0f; // 留空間給右側的等級數字顯示
+    // 黃色邊框包住整個頂部 (白框改為黃色，包住含 Level 區域)
+    drawList->AddRectFilled(ImVec2(0, 0), ImVec2(WINDOW_WIDTH, expBarHeight), IM_COL32(0, 0, 0, 255)); // 黑底
+    drawList->AddRectFilled(ImVec2(0, 0), ImVec2(expBarWidth * expRatio, expBarHeight), IM_COL32(30, 60, 200, 255)); // 藍條
+    // 在經驗值條和等級的最外圍畫黃色框
+    drawList->AddRect(ImVec2(0, 0), ImVec2(WINDOW_WIDTH, expBarHeight), IM_COL32(230, 230, 50, 255), 0.0f, 0, 2.0f); // 黃框 (厚度 2)
+    // 區隔經驗值與 Level 的線 (可選)
+    drawList->AddLine(ImVec2(expBarWidth, 0), ImVec2(expBarWidth, expBarHeight), IM_COL32(230, 230, 50, 255), 2.0f);
+
+    // 2. 玩家腳下的血條
     // 計算血條在畫面中「玩家下方」的位置
     glm::vec2 screenPlayerPos = m_Player->m_Transform.translation; 
     screenPlayerPos.x += (WINDOW_WIDTH / 2.0f);
     screenPlayerPos.y += (WINDOW_HEIGHT / 2.0f); // 置中
 
     ImVec2 healthBarSize(playerSize.x * 1.0f, 10.0f); // 與角色等同寬度比例
-    // 置換在角色下方
+    // 置換在角色下方 (Y軸往下遞增，因 ImGui 座標系 origin 於左上)
     ImVec2 healthBarPos(screenPlayerPos.x - healthBarSize.x / 2.0f,
                         WINDOW_HEIGHT - screenPlayerPos.y + playerSize.y / 2.0f + 10.0f);
     
-    // 取得 ImGui 畫布
-    ImDrawList* drawList = ImGui::GetBackgroundDrawList();
-
     // 繪製背景 (灰色)
     drawList->AddRectFilled(healthBarPos,
                             ImVec2(healthBarPos.x + healthBarSize.x, healthBarPos.y + healthBarSize.y),
@@ -1123,40 +1142,67 @@ void App::Update() {
                             ImVec2(healthBarPos.x + (healthBarSize.x * healthRatio), healthBarPos.y + healthBarSize.y),
                             IM_COL32(230, 40, 40, 255));
 
+    // 3. 上方數值顯示 (等級、時間、擊殺數)
+    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(WINDOW_WIDTH, 120), ImGuiCond_Always); 
+    ImGui::Begin("Player Status", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground |
+                 ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoMove);
 
-    // 格式化遊戲時間 (時:分:秒)
-    int timeHours = static_cast<int>(m_GameTimeMs / 3600000.0f);
+    // 等級 (放在經驗條右側)
+    ImGui::SetCursorPos(ImVec2(WINDOW_WIDTH - 70, 4));
+    ImGui::TextColored(ImVec4(1, 1, 1, 1), "LV %d", m_PlayerLevel);
+
+    // 格式化遊戲時間 (分:秒)
     int timeMinutes = static_cast<int>(m_GameTimeMs / 60000.0f) % 60;
     int timeSeconds = static_cast<int>(m_GameTimeMs / 1000.0f) % 60;
+    char timeText[64];
+    snprintf(timeText, sizeof(timeText), "%02d:%02d", timeMinutes, timeSeconds);
 
-    // 在畫面正上方畫經驗條與等級波次
-    ImGui::SetCursorPos(ImVec2(10, 10));
-    ImGui::TextColored(ImVec4(1, 1, 0, 1), "Lv %d", m_PlayerLevel);
-    ImGui::SameLine();
-    ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), " | Stage %d", m_CurrentStage);
-    ImGui::SameLine();
-    ImGui::TextColored(ImVec4(1, 1, 1, 1), " | Wave %d", m_CurrentWave);
-    ImGui::SameLine();
+    // 時間置中與放大
+    ImGui::SetWindowFontScale(2.5f); // 放大時間顯示的字體 (2.5倍)
+    ImVec2 timeTextSize = ImGui::CalcTextSize(timeText);
+    ImGui::SetCursorPos(ImVec2((WINDOW_WIDTH - timeTextSize.x) * 0.5f, 30));
+    ImGui::Text("%s", timeText);
+    ImGui::SetWindowFontScale(1.0f); // 還原字體大小給後面的 UI 使用
+
+    // 殺敵數 (右側)
+    char killText[64];
+    snprintf(killText, sizeof(killText), "%d", m_EnemiesDefeated);
+    ImVec2 killTextSize = ImGui::CalcTextSize(killText);
     
-    // 一律顯示 時:分:秒
-    ImGui::TextColored(ImVec4(0.8f, 0.8f, 1.0f, 1.0f), " | Time %02d:%02d:%02d", timeHours, timeMinutes, timeSeconds);
+    float killX = WINDOW_WIDTH - killTextSize.x - 45.0f;
+    ImGui::SetCursorPos(ImVec2(killX, 35));
+    ImGui::Text("%s", killText);
+    ImGui::SameLine();
+    if (m_EnemyCountIconImage && m_EnemyCountIconImage->GetTextureId() != 0) {
+        ImGui::SetCursorPosY(31); // 稍微往上移對齊文字
+        ImGui::Image((void*)(intptr_t)m_EnemyCountIconImage->GetTextureId(), ImVec2(30, 30));
+    }
 
-    ImGui::ProgressBar((float)m_PlayerExp / m_PlayerExpNext, ImVec2(280, 20), "EXP");
-
-    // 右上角暫停按鈕
-    ImGui::SetCursorPos(ImVec2(WINDOW_WIDTH - 100, 10));
+    // 預留鍵盤快捷鍵觸發暫停
     if (Util::Input::IsKeyUp(Util::Keycode::P)) {
         m_CurrentState = State::PAUSED;
     }
 
     ImGui::End();
 
-    // 獨立的暫停按鈕視窗 (避免被 NoInputs 阻擋或被 Size 裁切)
-    ImGui::SetNextWindowPos(ImVec2(WINDOW_WIDTH - 90, 10), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(80, 40), ImGuiCond_Always);
+    // 4. 獨立的暫停按鈕視窗 (接受滑鼠輸入)
+    ImGui::SetNextWindowPos(ImVec2(WINDOW_WIDTH - 60, 75), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(50, 50), ImGuiCond_Always);
     ImGui::Begin("PauseUI", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-    if (ImGui::Button("Pause", ImVec2(70, 30))) {
-        m_CurrentState = State::PAUSED;
+    
+    if (m_PauseIconImage && m_PauseIconImage->GetTextureId() != 0) {
+        ImGui::Image((void*)(intptr_t)m_PauseIconImage->GetTextureId(), ImVec2(32, 32));
+        // 若圖示被點擊，觸發暫停 (注意只處理左鍵 0)
+        if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) {
+            m_CurrentState = State::PAUSED;
+        }
+    } else {
+        // Fallback 文字按鈕
+        if (ImGui::Button("||", ImVec2(40, 40))) {
+            m_CurrentState = State::PAUSED;
+        }
     }
     ImGui::End();
     // =========================================
@@ -1265,24 +1311,161 @@ void App::DrawGameObjects() {
 }
 
 void App::UpdatePaused() {
+    if (m_BGM) m_BGM->Pause(); // 暫停時音樂也停下
+
     DrawGameObjects(); // 畫出底層但不會更新他們的邏輯，形成暫停效果
 
-    ImGui::SetNextWindowPos(ImVec2(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT / 2.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(300, 200), ImGuiCond_Always);
-    ImGui::Begin("Paused", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
+    // 1. 畫滿版半透明黑底，暗化背景
+    ImDrawList* bgDrawList = ImGui::GetBackgroundDrawList();
+    bgDrawList->AddRectFilled(ImVec2(0, 0), ImVec2(WINDOW_WIDTH, WINDOW_HEIGHT), IM_COL32(0, 0, 0, 150));
 
-    ImGui::Text("Game is Paused");
+    // 設定為滿版視窗
+    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(WINDOW_WIDTH, WINDOW_HEIGHT), ImGuiCond_Always);
+    
+    // 移除預設的標題列、背景等
+    ImGui::Begin("PausedMenu", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+
+    // ==========================================
+    // 左側面板 (狀態列表)
+    // ==========================================
+    ImGui::SetCursorPos(ImVec2(20, 20));
+    // 設定子視窗顏色與框線
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.9f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.8f, 0.6f, 0.2f, 1.0f)); // 邊框帶點金色
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 2.0f);
+    
+    ImGui::BeginChild("LeftStatsPanel", ImVec2(280, WINDOW_HEIGHT - 100), true);
+    
+    ImGui::TextColored(ImVec4(1, 1, 0, 1), "Player Stats"); // 標題
+    ImGui::Separator();
+    
+    // 使用兩欄的 Table 來對齊屬性名稱與數值
+    if (ImGui::BeginTable("StatsTable", 2, ImGuiTableFlags_None)) {
+        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, 50.0f);
+        
+        auto drawStatRow = [](const char* name, const char* val) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0); ImGui::Text("%s", name);
+            ImGui::TableSetColumnIndex(1); ImGui::Text("%s", val);
+        };
+
+        drawStatRow("Max Health", "100");
+        drawStatRow("Recovery", "+0");
+        drawStatRow("Armor", "+0");
+        drawStatRow("Move Speed", "+0%");
+        ImGui::Separator();
+        drawStatRow("Might", "+0%");
+        drawStatRow("Proj Speed", "+0%");
+        drawStatRow("Duration", "+0%");
+        drawStatRow("Area", "+0%");
+        ImGui::Separator();
+        drawStatRow("Cooldown", "-0%");
+        drawStatRow("Amount", "+0");
+        drawStatRow("Revival", "0");
+        drawStatRow("Magnet", "+0");
+        ImGui::Separator();
+        drawStatRow("Luck", "+0%");
+        drawStatRow("Growth", "+0%");
+        drawStatRow("Greed", "+0%");
+        drawStatRow("Curse", "+0%");
+
+        ImGui::EndTable();
+    }
+    ImGui::EndChild();
+    
+    // 還原左側面板的顏色與框線設定
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(2);
+
+    // ==========================================
+    // 中間面板 (遊戲統計數據 / 取代地圖)
+    // ==========================================
+    ImGui::SetCursorPos(ImVec2(320, 20)); // 定位到左側欄右邊
+    // 設定顏色與金色邊框
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.9f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.8f, 0.6f, 0.2f, 1.0f)); // 金色
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 2.0f);
+
+    ImGui::BeginChild("StatsPanel", ImVec2(WINDOW_WIDTH - 340, WINDOW_HEIGHT - 100), true);
+    
+    ImGui::SetWindowFontScale(1.5f);
+    ImGui::TextColored(ImVec4(1, 1, 0, 1), "Game Statistics");
     ImGui::Separator();
     ImGui::Dummy(ImVec2(0, 20));
 
-    // 按下 Resume 按鈕或是再按一次 P 都可以繼續
-    if (ImGui::Button("Resume", ImVec2(280, 50)) || Util::Input::IsKeyUp(Util::Keycode::P)) {
-        m_CurrentState = State::UPDATE;
-    }
+    // 格式化遊戲時間 (分:秒)
+    int timeMinutes = static_cast<int>(m_GameTimeMs / 60000.0f) % 60;
+    int timeSeconds = static_cast<int>(m_GameTimeMs / 1000.0f) % 60;
 
-    if (ImGui::Button("Exit", ImVec2(280, 50))) {
+    if (ImGui::BeginTable("StatisticsTable", 2, ImGuiTableFlags_None)) {
+        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+        
+        auto drawStatRow = [](const char* name, const char* val) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0); ImGui::Text("%s", name);
+            ImGui::TableSetColumnIndex(1); ImGui::Text("%s", val);
+        };
+
+        char timeBuf[64], killBuf[64], waveBuf[64], lvlBuf[64], stageBuf[64];
+        snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", timeMinutes, timeSeconds);
+        snprintf(killBuf, sizeof(killBuf), "%d", m_EnemiesDefeated);
+        snprintf(waveBuf, sizeof(waveBuf), "%d", m_CurrentWave);
+        snprintf(lvlBuf, sizeof(lvlBuf), "%d", m_PlayerLevel);
+        snprintf(stageBuf, sizeof(stageBuf), "%d", m_CurrentStage);
+
+        drawStatRow("Time Survived", timeBuf);
+        ImGui::Dummy(ImVec2(0, 10));
+        drawStatRow("Enemies Defeated", killBuf);
+        ImGui::Dummy(ImVec2(0, 10));
+        drawStatRow("Current Level", lvlBuf);
+        ImGui::Dummy(ImVec2(0, 10));
+        drawStatRow("Current Wave", waveBuf);
+        ImGui::Dummy(ImVec2(0, 10));
+        drawStatRow("Current Stage", stageBuf);
+
+        ImGui::EndTable();
+    }
+    
+    ImGui::SetWindowFontScale(1.0f);
+    ImGui::EndChild();
+    
+    // 還原顏色設定
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(2);
+
+    // ==========================================
+    // 底部按鈕區
+    // ==========================================
+    float buttonY = WINDOW_HEIGHT - 70;
+    
+    // 賦予按鈕金色邊框
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.8f, 0.6f, 0.2f, 1.0f)); // 金色
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 2.0f);
+    
+    // 離開按鈕 (紅色風格)
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.1f, 0.1f, 1.0f));
+    ImGui::SetCursorPos(ImVec2(20, buttonY));
+    if (ImGui::Button("EXIT", ImVec2(150, 40))) {
         m_CurrentState = State::END;
     }
+    ImGui::PopStyleColor();
+
+    // 繼續按鈕 (藍底黃字風格)
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.1f, 0.3f, 0.8f, 1.0f)); 
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.2f, 1.0f));
+    
+    ImGui::SetCursorPos(ImVec2(WINDOW_WIDTH - 220, buttonY));
+    if (ImGui::Button("CONTINUE", ImVec2(200, 40)) || Util::Input::IsKeyUp(Util::Keycode::P)) {
+        if (m_BGM) m_BGM->Resume();
+        m_CurrentState = State::UPDATE;
+    }
+    ImGui::PopStyleColor(2);
+    
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor();
 
     ImGui::End();
 
