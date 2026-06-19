@@ -33,6 +33,7 @@ struct EnemyUnit {
     std::shared_ptr<Util::Animation> defaultAnimation;  // 若有動畫則使用
     std::shared_ptr<Util::Image> hurtImage;             // 全白怪物的圖片
     bool isBoss = false;
+    bool isHurtImageSet = false;
 };
 
 struct ExpGem {
@@ -203,7 +204,7 @@ private:
     float m_KnifeAttackIntervalMs = 800.0f;
     float m_KnifeAttackTimerMs = 0.0f;
     float m_KnifeSpeed = 600.0f;
-    float m_KnifeDamage = 50.0f;  // 提升飛刀傷害加快節奏
+    float m_KnifeDamage = 65.0f;  // 提升飛刀傷害加快節奏
     glm::vec2 m_PlayerLastMoveDir = {1.0f, 0.0f};
 
     // 符文追蹤者武器相關變數
@@ -218,7 +219,7 @@ private:
     float m_RunetracerAttackIntervalMs = 1500.0f;
     float m_RunetracerAttackTimerMs = 0.0f;
     float m_RunetracerSpeed = 400.0f;
-    float m_RunetracerDamage = 35.0f;  // 提升符文傷害加快節奏
+    float m_RunetracerDamage = 45.0f;  // 提升符文傷害加快節奏
 
     float m_PlayerScale = 0.7f;
     float m_WeaponWidthRatioToPlayer = 1.5f;
@@ -236,7 +237,7 @@ private:
     float m_EnemySpawnMaxDistance = 1200.0f;
     float m_EnemyMoveSpeed = 0.12f;
     float m_EnemyWidthRatioToPlayer = 0.85f;
-    float m_WeaponDamage = 70.0f;            // 提升近戰揮砍傷害加快節奏
+    float m_WeaponDamage = 85.0f;            // 提升近戰揮砍傷害加快節奏
     float m_ExpGemSizeRatioToPlayer = 0.6f;  // 寶石大小比例
 
     int m_EnemiesDefeated = 0;           // 記錄擊殺數

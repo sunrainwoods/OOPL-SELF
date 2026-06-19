@@ -163,6 +163,7 @@ void App::Start() {
         enemy.speed = 100.0f;  // pixels per second
         enemy.damage = 10.0f;
         enemy.hitCooldownTimerMs = 0.0f;
+        enemy.isHurtImageSet = false;
         m_Enemies.push_back(enemy);
     }
 
@@ -387,8 +388,8 @@ void App::Update() {
     } else if (moveDir.x > 0.0f) {
         m_IsFacingLeft = false;
     }
-    // 玩家總無敵時間是 500ms，只要在 > 300ms 期間內顯示一次受擊白圖 (約亮白 200ms) 即可，避免像燈泡一樣閃爍
-    m_Player->SetState(m_IsFacingLeft, isMoving, m_PlayerHitCooldownTimerMs > 300.0f);
+    // 玩家總無敵時間是 250ms，只要在 > 150ms 期間內顯示一次受擊白圖即可
+    m_Player->SetState(m_IsFacingLeft, isMoving, m_PlayerHitCooldownTimerMs > 150.0f);
 
     // 解決武器動畫播到一半轉向造成的素材錯誤
     if (m_WeaponEffect.activeAnimation->GetState() == Util::Animation::State::PLAY) {
@@ -605,8 +606,8 @@ void App::Update() {
                     enemy.worldPosition =
                         m_PlayerWorldPosition + glm::vec2{std::cos(angle), std::sin(angle)} * bossDist;
 
-                    float baselineHP = 100.0f + static_cast<float>(m_CurrentWave - 1) * 200.0f;
-                    float baselineDmg = 10.0f + static_cast<float>(m_CurrentWave - 1) * 5.0f;
+                    float baselineHP = 100.0f + static_cast<float>(m_CurrentWave - 1) * 100.0f;
+                    float baselineDmg = 10.0f + static_cast<float>(m_CurrentWave - 1) * 3.0f;
 
                     float bossHealthMult = 8.0f;
                     float bossDmgMult = 2.0f;
@@ -649,7 +650,7 @@ void App::Update() {
                             enemy.worldPosition =
                                 m_PlayerWorldPosition + glm::vec2{std::cos(angle), std::sin(angle)} * circleRadius;
 
-                            float baselineHP = 100.0f + static_cast<float>(m_CurrentWave - 1) * 60.0f;
+                            float baselineHP = 100.0f + static_cast<float>(m_CurrentWave - 1) * 30.0f;
 
                             enemy.defaultImage = m_Enemy4Image;
                             enemy.hurtImage = m_Enemy4HurtImage;
@@ -675,68 +676,77 @@ void App::Update() {
         }
 
         // 設定該敵人的基礎數值 (後期強化)
-        float baselineHP = 60.0f + static_cast<float>(m_CurrentWave - 1) * 70.0f;
-        float baselineDmg = 6.0f + static_cast<float>(m_CurrentWave - 1) * 3.0f;
+        float baselineHP = 60.0f + static_cast<float>(m_CurrentWave - 1) * 35.0f;
+        float baselineDmg = 6.0f + static_cast<float>(m_CurrentWave - 1) * 1.5f;
 
-        const float angle = angleDist(rng);
-        const float distance = distanceDist(rng);
-        const glm::vec2 spawnOffset = glm::vec2{std::cos(angle), std::sin(angle)} * distance;
+        int spawnCount = 1;
+        if (m_CurrentWave >= 16) {
+            spawnCount = 3;
+        } else if (m_CurrentWave >= 7) {
+            spawnCount = 2;
+        }
+        for (int k = 0; k < spawnCount; ++k) {
+            const float angle = angleDist(rng);
+            const float distance = distanceDist(rng);
+            const glm::vec2 spawnOffset = glm::vec2{std::cos(angle), std::sin(angle)} * distance;
 
-        // Find available enemy in pool
-        for (auto &enemy : m_Enemies) {
-            if (!enemy.active) {
-                enemy.active = true;
-                enemy.isBoss = false;
-                enemy.defaultAnimation = nullptr;
-                enemy.worldPosition = m_PlayerWorldPosition + spawnOffset;
+            // Find available enemy in pool
+            for (auto &enemy : m_Enemies) {
+                if (!enemy.active) {
+                    enemy.active = true;
+                    enemy.isBoss = false;
+                    enemy.defaultAnimation = nullptr;
+                    enemy.worldPosition = m_PlayerWorldPosition + spawnOffset;
 
-                // 決定要生哪一種敵人
-                std::uniform_real_distribution<float> typeDist(0.0f, 100.0f);
-                float typeRoll = typeDist(rng);
+                    // 決定要生哪一種敵人
+                    std::uniform_real_distribution<float> typeDist(0.0f, 100.0f);
+                    float typeRoll = typeDist(rng);
 
-                if (typeRoll < 20.0f) {
-                    // Tanky
-                    enemy.defaultImage = m_Enemy3Image;
-                    enemy.hurtImage = m_Enemy3HurtImage;
-                    enemy.speed = 55.0f;
-                    enemy.damage = baselineDmg * 2.0f;
-                    enemy.maxHealth = baselineHP * 2.0f;
-                } else if (typeRoll < 50.0f) {
-                    // Balanced
-                    enemy.defaultImage = m_Enemy2Image;
-                    enemy.hurtImage = m_Enemy2HurtImage;
-                    enemy.speed = 95.0f;
-                    enemy.damage = baselineDmg;
-                    enemy.maxHealth = baselineHP;
-                } else {
-                    // Fast
-                    enemy.defaultImage = m_Enemy1Image;
-                    enemy.hurtImage = m_Enemy1HurtImage;
-                    enemy.speed = 170.0f;
-                    enemy.damage = baselineDmg * 0.5f;
-                    enemy.maxHealth = baselineHP * 0.5f;
+                    if (typeRoll < 20.0f) {
+                        // Tanky
+                        enemy.defaultImage = m_Enemy3Image;
+                        enemy.hurtImage = m_Enemy3HurtImage;
+                        enemy.speed = 55.0f;
+                        enemy.damage = baselineDmg * 2.0f;
+                        enemy.maxHealth = baselineHP * 2.0f;
+                    } else if (typeRoll < 50.0f) {
+                        // Balanced
+                        enemy.defaultImage = m_Enemy2Image;
+                        enemy.hurtImage = m_Enemy2HurtImage;
+                        enemy.speed = 95.0f;
+                        enemy.damage = baselineDmg;
+                        enemy.maxHealth = baselineHP;
+                    } else {
+                        // Fast
+                        enemy.defaultImage = m_Enemy1Image;
+                        enemy.hurtImage = m_Enemy1HurtImage;
+                        enemy.speed = 170.0f;
+                        enemy.damage = baselineDmg * 0.5f;
+                        enemy.maxHealth = baselineHP * 0.5f;
+                    }
+
+                    enemy.health = enemy.maxHealth;
+                    enemy.hitCooldownTimerMs = 0.0f;
+                    enemy.isHurtImageSet = false;
+
+                    enemy.object->SetDrawable(enemy.defaultImage);
+                    // 重新設定縮放比例，以防不同圖大小不同
+                    // 依據玩家要求，全體再調大一點點，把原先 1.0f 的基準改為 1.2f
+                    const float targetEnemyWidth = m_Player->GetScaledSize().x * m_EnemyWidthRatioToPlayer * 1.2f;
+                    const float enemyScale = targetEnemyWidth / enemy.defaultImage->GetSize().x;
+                    float finalScale = enemyScale;
+                    if (typeRoll < 20.0f)
+                        finalScale *= 1.5f;  // enemy3: larger
+                    else if (typeRoll < 50.0f)
+                        finalScale *= 1.0f;  // enemy2: standard
+                    else
+                        finalScale *= 0.7f;  // enemy1: smaller
+
+                    enemy.object->m_Transform.scale = {finalScale, finalScale};
+                    enemy.object->m_Transform.translation = enemy.worldPosition - m_CameraPosition;
+                    enemy.object->SetVisible(true);
+                    break;
                 }
-
-                enemy.health = enemy.maxHealth;
-                enemy.hitCooldownTimerMs = 0.0f;
-
-                enemy.object->SetDrawable(enemy.defaultImage);
-                // 重新設定縮放比例，以防不同圖大小不同
-                // 依據玩家要求，全體再調大一點點，把原先 1.0f 的基準改為 1.2f
-                const float targetEnemyWidth = m_Player->GetScaledSize().x * m_EnemyWidthRatioToPlayer * 1.2f;
-                const float enemyScale = targetEnemyWidth / enemy.defaultImage->GetSize().x;
-                float finalScale = enemyScale;
-                if (typeRoll < 20.0f)
-                    finalScale *= 1.5f;  // enemy3: larger
-                else if (typeRoll < 50.0f)
-                    finalScale *= 1.0f;  // enemy2: standard
-                else
-                    finalScale *= 0.7f;  // enemy1: smaller
-
-                enemy.object->m_Transform.scale = {finalScale, finalScale};
-                enemy.object->m_Transform.translation = enemy.worldPosition - m_CameraPosition;
-                enemy.object->SetVisible(true);
-                break;
             }
         }
     }
@@ -755,6 +765,17 @@ void App::Update() {
         // 減少敵人無敵時間
         if (enemy.hitCooldownTimerMs > 0.0f) {
             enemy.hitCooldownTimerMs -= deltaTimeMs;
+            if (!enemy.isHurtImageSet) {
+                enemy.object->SetDrawable(enemy.hurtImage);
+                enemy.isHurtImageSet = true;
+            }
+        } else {
+            if (enemy.isHurtImageSet) {
+                if (!enemy.isBoss) {
+                    enemy.object->SetDrawable(enemy.defaultImage);
+                }
+                enemy.isHurtImageSet = false;
+            }
         }
 
         const glm::vec2 toPlayer = m_PlayerWorldPosition - enemy.worldPosition;
@@ -771,13 +792,13 @@ void App::Update() {
         if (distanceToPlayer < damageHitRadius && m_PlayerHitCooldownTimerMs <= 0.0f) {
             float actualDamage = enemy.damage;
             if (enemy.defaultImage == m_Enemy4Image) {
-                float percent = 0.10f + static_cast<float>(m_CurrentWave - 1) * 0.02f;  // 初始 10%，每波增加 2%
+                float percent = 0.10f + static_cast<float>(m_CurrentWave - 1) * 0.01f;  // 初始 10%，每波增加 1%
                 actualDamage = m_PlayerMaxHealth * percent;
             }
             // 護甲減免
             actualDamage *= (1.0f - m_PlayerArmor);
             m_PlayerHealth -= actualDamage;
-            m_PlayerHitCooldownTimerMs = 500.0f;  // 玩家 0.5秒無敵時間
+            m_PlayerHitCooldownTimerMs = 250.0f;  // 玩家 0.25秒無敵時間
             if (m_PlayerHealth <= 0.0f) {
                 m_PlayerHealth = 0.0f;
                 m_CurrentState = State::GAME_OVER;  // 玩家死亡，切換狀態
@@ -885,8 +906,12 @@ void App::Update() {
                 float distSq = dx * dx + dy * dy;
 
                 if (distSq <= hitRadius * hitRadius && enemy.hitCooldownTimerMs <= 0.0f) {
-                    enemy.hitCooldownTimerMs = 300.0f;  // 武器冷卻：同一次揮擊只受傷一次
+                    enemy.hitCooldownTimerMs = 150.0f;  // 武器冷卻：同一次揮擊只受傷一次
                     enemy.health -= m_WeaponDamage;
+                    if (!enemy.isHurtImageSet) {
+                        enemy.object->SetDrawable(enemy.hurtImage);  // 立即切換受傷圖片
+                        enemy.isHurtImageSet = true;
+                    }
 
                     if (enemy.health <= 0.0f) {
                         m_PlayerHealth =
@@ -914,8 +939,13 @@ void App::Update() {
                 float dy = enemy.worldPosition.y - knife.worldPosition.y;
 
                 if ((dx * dx + dy * dy) <= hitRadius * hitRadius) {
-                    enemy.hitCooldownTimerMs = 300.0f;
+                    enemy.hitCooldownTimerMs = 150.0f;
                     enemy.health -= m_KnifeDamage;
+                    if (!enemy.isHurtImageSet) {
+                        enemy.object->SetDrawable(enemy.hurtImage);  // 立即切換受傷圖片
+                        enemy.isHurtImageSet = true;
+                    }
+                    
                     m_PlayerHealth = std::min(m_PlayerHealth + m_KnifeDamage * m_PlayerVampirism, m_PlayerMaxHealth);
 
                     knife.active = false;  // 飛刀碰撞後消失 (目前沒有穿透)
@@ -947,8 +977,13 @@ void App::Update() {
                 float distSq = dx * dx + dy * dy;
 
                 if (distSq <= hitRadius * hitRadius && enemy.hitCooldownTimerMs <= 0.0f) {
-                    enemy.hitCooldownTimerMs = 300.0f;  // 擊中冷卻
+                    enemy.hitCooldownTimerMs = 150.0f;  // 擊中冷卻
                     enemy.health -= m_RunetracerDamage;
+                    if (!enemy.isHurtImageSet) {
+                        enemy.object->SetDrawable(enemy.hurtImage);  // 立即切換受傷圖片
+                        enemy.isHurtImageSet = true;
+                    }
+                    
                     m_PlayerHealth =
                         std::min(m_PlayerHealth + m_RunetracerDamage * m_PlayerVampirism, m_PlayerMaxHealth);
 
@@ -1268,9 +1303,9 @@ void App::DrawGameObjects() {
         if (enemy.active) {
             if (std::abs(enemy.worldPosition.x - m_CameraPosition.x) < cullDistX &&
                 std::abs(enemy.worldPosition.y - m_CameraPosition.y) < cullDistY) {
-                // 受擊閃爍特效改為「實體白化」: 只要還處於冷卻時間的前半段 (大於 150ms，因為總共是 300ms)
+                // 受擊閃爍特效改為「實體白化」: 只要還處於冷卻時間的前半段 (大於 75ms，因為總共被改為 150ms)
                 // 就顯示白圖，給出單次閃爍的感覺
-                if (enemy.hitCooldownTimerMs > 150.0f) {
+                if (enemy.hitCooldownTimerMs > 75.0f) {
                     enemy.object->SetDrawable(enemy.hurtImage);
                 } else {
                     if (enemy.defaultAnimation) {
