@@ -606,8 +606,8 @@ void App::Update() {
                     enemy.worldPosition =
                         m_PlayerWorldPosition + glm::vec2{std::cos(angle), std::sin(angle)} * bossDist;
 
-                    float baselineHP = 100.0f + static_cast<float>(m_CurrentWave - 1) * 100.0f;
-                    float baselineDmg = 10.0f + static_cast<float>(m_CurrentWave - 1) * 3.0f;
+                    float baselineHP = 150.0f + static_cast<float>(m_CurrentWave - 1) * 150.0f;
+                    float baselineDmg = 15.0f + static_cast<float>(m_CurrentWave - 1) * 4.5f;
 
                     float bossHealthMult = 8.0f;
                     float bossDmgMult = 2.0f;
@@ -650,7 +650,7 @@ void App::Update() {
                             enemy.worldPosition =
                                 m_PlayerWorldPosition + glm::vec2{std::cos(angle), std::sin(angle)} * circleRadius;
 
-                            float baselineHP = 100.0f + static_cast<float>(m_CurrentWave - 1) * 30.0f;
+                            float baselineHP = 150.0f + static_cast<float>(m_CurrentWave - 1) * 45.0f;
 
                             enemy.defaultImage = m_Enemy4Image;
                             enemy.hurtImage = m_Enemy4HurtImage;
@@ -676,8 +676,8 @@ void App::Update() {
         }
 
         // 設定該敵人的基礎數值 (後期強化)
-        float baselineHP = 60.0f + static_cast<float>(m_CurrentWave - 1) * 35.0f;
-        float baselineDmg = 6.0f + static_cast<float>(m_CurrentWave - 1) * 1.5f;
+        float baselineHP = 90.0f + static_cast<float>(m_CurrentWave - 1) * 52.5f;
+        float baselineDmg = 9.0f + static_cast<float>(m_CurrentWave - 1) * 2.25f;
 
         int spawnCount = 1;
         if (m_CurrentWave >= 16) {
@@ -792,7 +792,7 @@ void App::Update() {
         if (distanceToPlayer < damageHitRadius && m_PlayerHitCooldownTimerMs <= 0.0f) {
             float actualDamage = enemy.damage;
             if (enemy.defaultImage == m_Enemy4Image) {
-                float percent = 0.10f + static_cast<float>(m_CurrentWave - 1) * 0.01f;  // 初始 10%，每波增加 1%
+                float percent = 0.15f + static_cast<float>(m_CurrentWave - 1) * 0.015f;  // 初始 15%，每波增加 1.5%
                 actualDamage = m_PlayerMaxHealth * percent;
             }
             // 護甲減免
