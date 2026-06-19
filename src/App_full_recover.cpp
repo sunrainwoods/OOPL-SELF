@@ -72,8 +72,6 @@ void App::Start() {
     m_EnemiesDefeated = 0;
     m_CurrentWave = 1;
     m_CurrentStage = 1;
-    m_KillsToNextWave = 10;
-    m_MagnetTimerMs = 0.0f;
     m_GameTimeMs = 0.0f;
     m_EnemySpawnIntervalMs = 1200.0f;
 
@@ -137,23 +135,8 @@ void App::Start() {
     m_Enemy3HurtImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/hurt_enemy3.png");
     m_Enemy4Image = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/enemy4.png");
     m_Enemy4HurtImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/hurt_enemy4.png");
-    m_GameOverImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/game_over.png");
-    
-    std::vector<std::string> bossLeftFrames = {
-        std::string(RESOURCE_DIR) + "/boss_left1.png",
-        std::string(RESOURCE_DIR) + "/boss_left2.png",
-        std::string(RESOURCE_DIR) + "/boss_left3.png",
-        std::string(RESOURCE_DIR) + "/boss_left4.png"
-    };
-    std::vector<std::string> bossRightFrames = {
-        std::string(RESOURCE_DIR) + "/boss_right1.png",
-        std::string(RESOURCE_DIR) + "/boss_right2.png",
-        std::string(RESOURCE_DIR) + "/boss_right3.png",
-        std::string(RESOURCE_DIR) + "/boss_right4.png"
-    };
-    m_BossLeftAnimation = std::make_shared<Util::Animation>(bossLeftFrames, true, 100, true, 0);
-    m_BossRightAnimation = std::make_shared<Util::Animation>(bossRightFrames, true, 100, true, 0);
-    
+    m_BossLeftImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/boss_left1.png");
+    m_BossRightImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/boss_right1.png");
     m_BossHurtLeftImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/hurt_boss_left1.png");
     m_BossHurtRightImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/hurt_boss_right1.png");
 
@@ -221,7 +204,7 @@ void App::Start() {
         gem.object->SetVisible(false);
         gem.active = false;
         gem.expValue = 1;
-        gem.pickupCooldownTimerMs = 150.0f;
+        gem.pickupCooldownTimerMs = 0.0f;
         m_ExpGems.push_back(gem);
     }
 
@@ -239,46 +222,8 @@ void App::Start() {
         const float itemScale = targetWidth / m_HealthImage->GetSize().x;
         potion.object->m_Transform.scale = {itemScale, itemScale};
         potion.active = false;
-        potion.pickupCooldownTimerMs = 150.0f;
+        potion.pickupCooldownTimerMs = 0.0f;
         m_HealthItems.push_back(potion);
-    }
-
-    // Initialize Magnet Item Object Pool
-    m_MagnetImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/magnet.png");
-    m_MagnetItems.clear();
-    m_MagnetItems.reserve(m_MaxMagnetItems);
-    for (int i = 0; i < m_MaxMagnetItems; ++i) {
-        MagnetItem magnet;
-        magnet.object = std::make_shared<Util::GameObject>();
-        magnet.object->SetDrawable(m_MagnetImage);
-        magnet.object->SetZIndex(3.0f);
-        magnet.object->SetVisible(false);
-        
-        const float targetWidth = playerSize.x * m_ExpGemSizeRatioToPlayer;
-        const float itemScale = targetWidth / m_MagnetImage->GetSize().x;
-        magnet.object->m_Transform.scale = {itemScale, itemScale};
-        magnet.active = false;
-        magnet.pickupCooldownTimerMs = 150.0f;
-        m_MagnetItems.push_back(magnet);
-    }
-
-    // Initialize Boss Reward Object Pool
-    m_RewardImage = std::make_shared<Util::Image>(std::string(RESOURCE_DIR) + "/reward.png");
-    m_RewardItems.clear();
-    m_RewardItems.reserve(m_MaxRewardItems);
-    for (int i = 0; i < m_MaxRewardItems; ++i) {
-        RewardItem reward;
-        reward.object = std::make_shared<Util::GameObject>();
-        reward.object->SetDrawable(m_RewardImage);
-        reward.object->SetZIndex(3.0f);
-        reward.object->SetVisible(false);
-        
-        const float targetWidth = playerSize.x * m_ExpGemSizeRatioToPlayer * 1.5f; // 稍微大一點
-        const float itemScale = targetWidth / m_RewardImage->GetSize().x;
-        reward.object->m_Transform.scale = {itemScale, itemScale};
-        reward.active = false;
-        reward.pickupCooldownTimerMs = 150.0f;
-        m_RewardItems.push_back(reward);
     }
 
     // 載入飛刀圖片並初始化飛刀 Object Pool
@@ -326,34 +271,6 @@ void App::Start() {
     }
 
     // Reset player states
-    m_WhipRangeLevel = 1;
-    m_WhipDamageLevel = 1;
-    m_WhipCooldownLevel = 1;
-    m_KnifeCountLevel = 1;
-    m_KnifeDamageLevel = 1;
-    m_KnifeCooldownLevel = 1;
-    m_RunetracerCountLevel = 1;
-    m_RunetracerDamageLevel = 1;
-    m_RunetracerCooldownLevel = 1;
-    m_MaxHealthLevel = 1;
-    m_ArmorLevel = 1;
-    m_VampirismLevel = 1;
-    m_KnifeUnlocked = false;
-    m_RunetracerUnlocked = false;
-    m_ArmorUnlocked = false;
-    m_VampirismUnlocked = false;
-    m_PlayerArmor = 0.0f;
-    m_PlayerVampirism = 0.0f;
-    m_WeaponAttackIntervalMs = 600.0f; // 鞭子最快
-    m_KnifeAttackIntervalMs = 800.0f; // 小刀居中
-    m_RunetracerAttackIntervalMs = 1500.0f; // 符文追蹤者最慢
-    m_WeaponHitRadiusRatioToPlayer = 1.0f;
-    m_WeaponDamage = 100.0f; // 鞭子最痛
-    m_KnifeDamage = 80.0f;   // 小刀居中
-    m_KnifeCount = 1;
-    m_RunetracerDamage = 35.0f;
-    m_RunetracerCount = 1;
-    m_PlayerMaxHealth = 100.0f;
     m_PlayerHealth = m_PlayerMaxHealth;
     m_PlayerLevel = 1;
     m_PlayerExp = 0;
@@ -369,9 +286,6 @@ void App::Start() {
 }
 
 void App::Update() {
-    if (m_BossLeftAnimation) m_BossLeftAnimation->Play();
-    if (m_BossRightAnimation) m_BossRightAnimation->Play();
-    if (m_Player) m_Player->PlayAnimation();
     glm::vec2 moveDir = {0.0f, 0.0f};
     if (Util::Input::IsKeyPressed(Util::Keycode::W)) {
         moveDir.y += 1.0f;
@@ -439,31 +353,23 @@ void App::Update() {
     }
 
     // --- 飛刀武器邏輯 ---
-    if (m_KnifeUnlocked) {
-        m_KnifeAttackTimerMs += Util::Time::GetDeltaTimeMs();
-        if (m_KnifeAttackTimerMs >= m_KnifeAttackIntervalMs) {
-            m_KnifeAttackTimerMs = 0.0f;
-            
-            int spawned = 0;
-            float baseAngle = atan2(m_PlayerLastMoveDir.y, m_PlayerLastMoveDir.x);
-            float angleStep = 0.15f; // 每把飛刀間隔 0.15 弧度
-            float startAngle = baseAngle - (m_KnifeCount - 1) * angleStep * 0.5f;
-
-            for (auto& knife : m_Knives) {
-                if (!knife.active) {
-                    knife.active = true;
-                    knife.worldPosition = m_PlayerWorldPosition;
-                    
-                    knife.angle = startAngle + spawned * angleStep;
-                    knife.velocity = glm::vec2(std::cos(knife.angle), std::sin(knife.angle)) * m_KnifeSpeed;
-                    knife.timeToLiveMs = 2000.0f;
-                    
-                    knife.object->m_Transform.rotation = knife.angle;
-                    knife.object->SetVisible(true);
-                    
-                    spawned++;
-                    if (spawned >= m_KnifeCount) break;
-                }
+    m_KnifeAttackTimerMs += Util::Time::GetDeltaTimeMs();
+    if (m_KnifeAttackTimerMs >= m_KnifeAttackIntervalMs) {
+        m_KnifeAttackTimerMs = 0.0f;
+        
+        // 尋找一個不在作用中的飛刀
+        for (auto& knife : m_Knives) {
+            if (!knife.active) {
+                knife.active = true;
+                knife.worldPosition = m_PlayerWorldPosition; // 從玩家位置發射
+                knife.velocity = m_PlayerLastMoveDir * m_KnifeSpeed;
+                knife.timeToLiveMs = 2000.0f; // 存活 2 秒
+                
+                // 根據方向計算旋轉角度
+                knife.angle = atan2(m_PlayerLastMoveDir.y, m_PlayerLastMoveDir.x);
+                knife.object->m_Transform.rotation = knife.angle;
+                knife.object->SetVisible(true);
+                break;
             }
         }
     }
@@ -483,33 +389,29 @@ void App::Update() {
     }
 
     // --- 符文追蹤者武器邏輯 ---
-    if (m_RunetracerUnlocked) {
-        m_RunetracerAttackTimerMs += Util::Time::GetDeltaTimeMs();
-        if (m_RunetracerAttackTimerMs >= m_RunetracerAttackIntervalMs) {
-            m_RunetracerAttackTimerMs = 0.0f;
-            
-            int spawned = 0;
-            static std::mt19937 runeRng(std::random_device{}());
-            std::uniform_real_distribution<float> angleDist(0.0f, 6.2831853f); // 0 到 2*PI
-
-            for (auto& rune : m_Runetracers) {
-                if (!rune.active) {
-                    rune.active = true;
-                    rune.worldPosition = m_PlayerWorldPosition;
-                    
-                    float randomAngle = angleDist(runeRng);
-                    
-                    rune.velocity = glm::vec2(std::cos(randomAngle), std::sin(randomAngle)) * m_RunetracerSpeed;
-                    rune.timeToLiveMs = 4000.0f;
-                    rune.angle = randomAngle;
-                    rune.historyPositions.clear();
-                    
-                    rune.object->m_Transform.rotation = rune.angle;
-                    rune.object->SetVisible(true);
-                    
-                    spawned++;
-                    if (spawned >= m_RunetracerCount) break;
-                }
+    m_RunetracerAttackTimerMs += Util::Time::GetDeltaTimeMs();
+    if (m_RunetracerAttackTimerMs >= m_RunetracerAttackIntervalMs) {
+        m_RunetracerAttackTimerMs = 0.0f;
+        
+        for (auto& rune : m_Runetracers) {
+            if (!rune.active) {
+                rune.active = true;
+                rune.worldPosition = m_PlayerWorldPosition;
+                
+                // 隨機發射角度
+                static std::mt19937 runeRng(std::random_device{}());
+                std::uniform_real_distribution<float> angleDist(0.0f, 6.2831853f); // 0 到 2*PI
+                float randomAngle = angleDist(runeRng);
+                
+                rune.velocity = glm::vec2(std::cos(randomAngle), std::sin(randomAngle)) * m_RunetracerSpeed;
+                rune.timeToLiveMs = 4000.0f; // 存活 4 秒
+                rune.angle = randomAngle;
+                
+                rune.historyPositions.clear(); // 清空舊的軌跡
+                
+                rune.object->m_Transform.rotation = rune.angle;
+                rune.object->SetVisible(true);
+                break;
             }
         }
     }
@@ -620,30 +522,25 @@ void App::Update() {
                 if (!enemy.active) {
                     enemy.active = true;
                     enemy.isBoss = true;
+                    enemy.isElite = false;
                     
                     float angle = angleDist(rng);
                     float bossDist = m_EnemySpawnMaxDistance * 0.8f;
                     enemy.worldPosition = m_PlayerWorldPosition + glm::vec2{std::cos(angle), std::sin(angle)} * bossDist;
                     
-                    float baselineHP = 100.0f + static_cast<float>(m_CurrentWave - 1) * 200.0f;
-                    float baselineDmg = 10.0f + static_cast<float>(m_CurrentWave - 1) * 5.0f;
-                    
-                    float bossHealthMult = 8.0f;
-                    float bossDmgMult = 2.0f;
-                    
-                    enemy.defaultAnimation = m_BossLeftAnimation;
+                    enemy.defaultImage = m_BossLeftImage;
                     enemy.hurtImage = m_BossHurtLeftImage;
-                    enemy.speed = 65.0f; // 再調慢
-                    enemy.damage = baselineDmg * bossDmgMult; // 王的攻擊力
-                    enemy.maxHealth = baselineHP * bossHealthMult; // 王的血量
+                    enemy.speed = 30.0f; // Boss走比較慢
+                    enemy.damage = 60.0f;
+                    enemy.maxHealth = 2000.0f + static_cast<float>(m_CurrentWave) * 200.0f;
                     enemy.health = enemy.maxHealth;
                     enemy.hitCooldownTimerMs = 0.0f;
                     
-                    enemy.object->SetDrawable(enemy.defaultAnimation);
+                    enemy.object->SetDrawable(enemy.defaultImage);
                     enemy.object->SetZIndex(4.2f);
                     
                     const float targetEnemyWidth = m_Player->GetScaledSize().x * 3.0f; // Boss很大
-                    const float enemyScale = targetEnemyWidth / m_BossLeftAnimation->GetSize().x;
+                    const float enemyScale = targetEnemyWidth / enemy.defaultImage->GetSize().x;
                     enemy.object->m_Transform.scale = {enemyScale, enemyScale};
                     enemy.object->m_Transform.translation = enemy.worldPosition - m_CameraPosition;
                     enemy.object->SetVisible(true);
@@ -663,25 +560,23 @@ void App::Update() {
                         if (!enemy.active) {
                             enemy.active = true;
                             enemy.isBoss = false;
-                            enemy.defaultAnimation = nullptr;
+                            enemy.isElite = false;
                             
                             float angle = (glm::two_pi<float>() / specialEnemyCount) * i;
                             enemy.worldPosition = m_PlayerWorldPosition + glm::vec2{std::cos(angle), std::sin(angle)} * circleRadius;
                             
-                            float baselineHP = 100.0f + static_cast<float>(m_CurrentWave - 1) * 60.0f;
-                            
                             enemy.defaultImage = m_Enemy4Image;
                             enemy.hurtImage = m_Enemy4HurtImage;
-                            enemy.speed = 45.0f; 
-                            enemy.damage = 0.0f; // 百分比傷害會在碰撞處特別處理
-                            enemy.maxHealth = baselineHP * 3.0f;
+                            enemy.speed = 40.0f; // 慢慢包圍
+                            enemy.damage = 40.0f;
+                            enemy.maxHealth = 400.0f + static_cast<float>(m_CurrentWave) * 50.0f;
                             enemy.health = enemy.maxHealth;
                             enemy.hitCooldownTimerMs = 0.0f;
                             
                             enemy.object->SetDrawable(enemy.defaultImage);
                             enemy.object->SetZIndex(4.1f);
                             
-                            const float targetEnemyWidth = m_Player->GetScaledSize().x * m_EnemyWidthRatioToPlayer;
+                            const float targetEnemyWidth = m_Player->GetScaledSize().x * 1.2f;
                             const float enemyScale = targetEnemyWidth / enemy.defaultImage->GetSize().x;
                             enemy.object->m_Transform.scale = {enemyScale, enemyScale};
                             enemy.object->m_Transform.translation = enemy.worldPosition - m_CameraPosition;
@@ -692,10 +587,6 @@ void App::Update() {
                 }
             }
         }
-        
-        // 設定該敵人的基礎數值 (後期強化)
-        float baselineHP = 60.0f + static_cast<float>(m_CurrentWave - 1) * 70.0f;
-        float baselineDmg = 6.0f + static_cast<float>(m_CurrentWave - 1) * 3.0f;
 
         const float angle = angleDist(rng);
         const float distance = distanceDist(rng);
@@ -707,7 +598,6 @@ void App::Update() {
             if (!enemy.active) {
                 enemy.active = true;
                 enemy.isBoss = false;
-                enemy.defaultAnimation = nullptr;
                 enemy.worldPosition = m_PlayerWorldPosition + spawnOffset;
                 
                 // 決定要生哪一種敵人
@@ -715,26 +605,36 @@ void App::Update() {
                 float typeRoll = typeDist(rng);
                 
                 if (typeRoll < 20.0f) {
-                    // Tanky
+                    // 20% 機率生成 enemy3 (大隻、血多、慢)
                     enemy.defaultImage = m_Enemy3Image;
                     enemy.hurtImage = m_Enemy3HurtImage;
-                    enemy.speed = 55.0f;
-                    enemy.damage = baselineDmg * 2.0f;
-                    enemy.maxHealth = baselineHP * 2.0f;
+                    enemy.speed = 40.0f;
+                    enemy.damage = 30.0f;
+                    enemy.maxHealth = 400.0f + static_cast<float>(m_CurrentWave - 1) * 50.0f;
                 } else if (typeRoll < 50.0f) {
-                    // Balanced
+                    // 30% 機率生成 enemy2 (小隻、血少、快)
                     enemy.defaultImage = m_Enemy2Image;
                     enemy.hurtImage = m_Enemy2HurtImage;
-                    enemy.speed = 95.0f;
-                    enemy.damage = baselineDmg;
-                    enemy.maxHealth = baselineHP;
+                    enemy.speed = 150.0f;
+                    enemy.damage = 15.0f;
+                    enemy.maxHealth = 60.0f + static_cast<float>(m_CurrentWave - 1) * 10.0f;
                 } else {
-                    // Fast
+                    // 50% 機率生成 enemy1 (標準)
                     enemy.defaultImage = m_Enemy1Image;
                     enemy.hurtImage = m_Enemy1HurtImage;
-                    enemy.speed = 170.0f;
-                    enemy.damage = baselineDmg * 0.5f;
-                    enemy.maxHealth = baselineHP * 0.5f;
+                    enemy.speed = 100.0f;
+                    enemy.damage = 10.0f;
+                    enemy.maxHealth = 100.0f + static_cast<float>(m_CurrentWave - 1) * 20.0f;
+                }
+                // 5% 機率成為菁英怪
+                std::uniform_real_distribution<float> eliteDist(0.0f, 100.0f);
+                if (eliteDist(rng) < 5.0f) {
+                    enemy.isElite = true;
+                    enemy.maxHealth *= 5.0f; // 血量變 5 倍
+                    enemy.damage *= 1.5f;    // 攻擊力變 1.5 倍
+                    // 稍微放大體型
+                } else {
+                    enemy.isElite = false;
                 }
                 
                 enemy.health = enemy.maxHealth;
@@ -742,13 +642,14 @@ void App::Update() {
                 
                 enemy.object->SetDrawable(enemy.defaultImage);
                 // 重新設定縮放比例，以防不同圖大小不同
-                // 依據玩家要求，全體再調大一點點，把原先 1.0f 的基準改為 1.2f
-                const float targetEnemyWidth = m_Player->GetScaledSize().x * m_EnemyWidthRatioToPlayer * 1.2f;
+                const float targetEnemyWidth = m_Player->GetScaledSize().x * m_EnemyWidthRatioToPlayer;
                 const float enemyScale = targetEnemyWidth / enemy.defaultImage->GetSize().x;
+                // 如果是 enemy3 讓它稍微再大一點點，enemy2 取原 targetEnemyWidth
                 float finalScale = enemyScale;
-                if (typeRoll < 20.0f) finalScale *= 1.5f; // enemy3: larger
-                else if (typeRoll < 50.0f) finalScale *= 1.0f; // enemy2: standard
-                else finalScale *= 0.7f; // enemy1: smaller
+                if (typeRoll < 20.0f) finalScale *= 1.5f; 
+                else if (typeRoll < 50.0f) finalScale *= 0.8f;
+                
+                if (enemy.isElite) finalScale *= 1.3f; // 菁英怪再放大 1.3 倍
                 
                 enemy.object->m_Transform.scale = {finalScale, finalScale};
                 enemy.object->m_Transform.translation = enemy.worldPosition - m_CameraPosition;
@@ -786,14 +687,7 @@ void App::Update() {
 
         // 如果距離太近，玩家扣血
         if (distanceToPlayer < damageHitRadius && m_PlayerHitCooldownTimerMs <= 0.0f) {
-            float actualDamage = enemy.damage;
-            if (enemy.defaultImage == m_Enemy4Image) {
-                float percent = 0.10f + static_cast<float>(m_CurrentWave - 1) * 0.02f; // 初始 10%，每波增加 2%
-                actualDamage = m_PlayerMaxHealth * percent;
-            }
-            // 護甲減免
-            actualDamage *= (1.0f - m_PlayerArmor);
-            m_PlayerHealth -= actualDamage;
+            m_PlayerHealth -= enemy.damage; // 依據敵人數值計算傷害
             m_PlayerHitCooldownTimerMs = 500.0f; // 玩家 0.5秒無敵時間
             if (m_PlayerHealth <= 0.0f) {
                 m_PlayerHealth = 0.0f;
@@ -862,16 +756,16 @@ void App::Update() {
             // 若為 Boss，根據移動方向切換左右圖片
             if (enemy.isBoss) {
                 if (direction.x < 0.0f) {
-                    enemy.defaultAnimation = m_BossLeftAnimation;
+                    enemy.defaultImage = m_BossLeftImage;
                     enemy.hurtImage = m_BossHurtLeftImage;
                 } else {
-                    enemy.defaultAnimation = m_BossRightAnimation;
+                    enemy.defaultImage = m_BossRightImage;
                     enemy.hurtImage = m_BossHurtRightImage;
                 }
                 
                 // 如果沒有處於受傷狀態，立即更新為對應的 defaultImage
                 if (enemy.hitCooldownTimerMs <= 0.0f) {
-                    enemy.object->SetDrawable(enemy.defaultAnimation);
+                    enemy.object->SetDrawable(enemy.defaultImage);
                 }
             }
 
@@ -895,23 +789,78 @@ void App::Update() {
     if (weaponCanHit) {
         const glm::vec2 weaponHitCenter = m_PlayerWorldPosition + weaponOffset;
         const float hitRadius =
-            m_Player->GetScaledSize().x * m_WeaponHitRadiusRatioToPlayer;
+            playerSize.x * m_WeaponHitRadiusRatioToPlayer;
         const float hitRadiusSq = hitRadius * hitRadius;
 
         for (auto *enemyPtr : activeEnemies) {
             auto &enemy = *enemyPtr;
-            if (enemy.active) {
+            if (enemy.active && enemy.hitCooldownTimerMs <= 0.0f) {
                 float dx = enemy.worldPosition.x - weaponHitCenter.x;
                 float dy = enemy.worldPosition.y - weaponHitCenter.y;
-                float distSq = dx * dx + dy * dy;
 
-                if (distSq <= hitRadius * hitRadius && enemy.hitCooldownTimerMs <= 0.0f) {
+                if ((dx * dx + dy * dy) <= hitRadiusSq) {
                     enemy.hitCooldownTimerMs = 300.0f; // 武器冷卻：同一次揮擊只受傷一次
                     enemy.health -= m_WeaponDamage;
-                    
                     if (enemy.health <= 0.0f) {
-                        m_PlayerHealth = std::min(m_PlayerHealth + m_PlayerMaxHealth * m_PlayerVampirism, m_PlayerMaxHealth);
-                        HandleEnemyDeath(enemy);
+                        enemy.active = false;
+                        enemy.object->SetVisible(false);
+
+                        // 擊殺統計與波次更新
+                        m_EnemiesDefeated++;
+                        m_CurrentWave = (m_EnemiesDefeated / 15) + 1;
+                        m_CurrentStage = (m_CurrentWave - 1) / 5 + 1; // 每 5 波 (75隻敵人) 推進一關
+                        m_EnemySpawnIntervalMs = std::max(200.0f, 1200.0f - static_cast<float>(m_CurrentWave - 1) * 100.0f); // 生成速度隨波次加快
+
+                        static std::mt19937 dropRng(std::random_device{}());
+                        std::uniform_real_distribution<float> dropDist(0.0f, 100.0f);
+                        float dropRoll = dropDist(dropRng);
+
+                        // 掉落經驗值寶石 (依機率決定掉落哪一種)
+                        for (auto &gem : m_ExpGems) {
+                            if (!gem.active) {
+                                gem.active = true;
+                                gem.worldPosition = enemy.worldPosition;
+                                gem.pickupCooldownTimerMs = 800.0f; // 0.8 秒掉落冷卻
+                                
+                                std::shared_ptr<Util::Image> selectedImage;
+                                if (dropRoll < 5.0f) {
+                                    // 5% 機率掉落 Experience_Gem3 (最高經驗值)
+                                    gem.expValue = 10;
+                                    selectedImage = m_Gem3Image;
+                                } else if (dropRoll < 25.0f) {
+                                    // 20% 機率掉落 Experience_Gem2 (中等經驗值)
+                                    gem.expValue = 3;
+                                    selectedImage = m_Gem2Image;
+                                } else {
+                                    // 75% 機率掉落 Experience_Gem1 (最低經驗值)
+                                    gem.expValue = 1;
+                                    selectedImage = m_Gem1Image;
+                                }
+                                
+                                gem.object->SetDrawable(selectedImage);
+                                
+                                // 依據所選圖片與玩家比例重新設定大小
+                                const float targetWidth = playerSize.x * m_ExpGemSizeRatioToPlayer;
+                                const float imgScale = targetWidth / selectedImage->GetSize().x;
+                                gem.object->m_Transform.scale = {imgScale, imgScale};
+                                gem.object->SetVisible(true);
+                                break;
+                            }
+                        }
+
+                        // 3% 機率掉落補血道具 (check.png)
+                        if (dropDist(dropRng) < 3.0f) {
+                            for (auto &potion : m_HealthItems) {
+                                if (!potion.active) {
+                                    potion.active = true;
+                                    // 稍微往旁邊偏移一點，避免跟寶石完全重疊
+                                    potion.worldPosition = enemy.worldPosition + glm::vec2(20.0f, 20.0f);
+                                    potion.pickupCooldownTimerMs = 800.0f;
+                                    potion.object->SetVisible(true);
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -922,7 +871,7 @@ void App::Update() {
     for (auto& knife : m_Knives) {
         if (!knife.active) continue;
 
-        const float knifeHitRadius = m_Player->GetScaledSize().x * 0.4f * 0.5f;
+        const float knifeHitRadius = playerSize.x * 0.4f * 0.5f;
 
         for (auto* enemyPtr : activeEnemies) {
             auto& enemy = *enemyPtr;
@@ -936,13 +885,69 @@ void App::Update() {
                 if ((dx * dx + dy * dy) <= hitRadius * hitRadius) {
                     enemy.hitCooldownTimerMs = 300.0f;
                     enemy.health -= m_KnifeDamage;
-                    m_PlayerHealth = std::min(m_PlayerHealth + m_KnifeDamage * m_PlayerVampirism, m_PlayerMaxHealth);
                     
                     knife.active = false; // 飛刀碰撞後消失 (目前沒有穿透)
                     knife.object->SetVisible(false);
 
                     if (enemy.health <= 0.0f) {
-                        HandleEnemyDeath(enemy);
+                        enemy.active = false;
+                        enemy.object->SetVisible(false);
+
+                        // 擊殺統計與波次更新
+                        m_EnemiesDefeated++;
+                        m_CurrentWave = (m_EnemiesDefeated / 15) + 1;
+                        m_CurrentStage = (m_CurrentWave - 1) / 5 + 1; // 每 5 波 (75隻敵人) 推進一關
+                        m_EnemySpawnIntervalMs = std::max(200.0f, 1200.0f - static_cast<float>(m_CurrentWave - 1) * 100.0f); // 生成速度隨波次加快
+
+                        static std::mt19937 dropRng(std::random_device{}());
+                        std::uniform_real_distribution<float> dropDist(0.0f, 100.0f);
+                        float dropRoll = dropDist(dropRng);
+
+                        // 掉落經驗值寶石 (依機率決定掉落哪一種)
+                        for (auto &gem : m_ExpGems) {
+                            if (!gem.active) {
+                                gem.active = true;
+                                gem.worldPosition = enemy.worldPosition;
+                                gem.pickupCooldownTimerMs = 800.0f; // 0.8 秒掉落冷卻
+                                
+                                std::shared_ptr<Util::Image> selectedImage;
+                                if (dropRoll < 5.0f) {
+                                    // 5% 機率掉落 Experience_Gem3 (最高經驗值)
+                                    gem.expValue = 10;
+                                    selectedImage = m_Gem3Image;
+                                } else if (dropRoll < 20.0f) {
+                                    // 15% 機率掉落 Experience_Gem2
+                                    gem.expValue = 4;
+                                    selectedImage = m_Gem2Image;
+                                } else {
+                                    // 80% 機率掉落 Experience_Gem1
+                                    gem.expValue = 1;
+                                    selectedImage = m_Gem1Image;
+                                }
+                                gem.object->SetDrawable(selectedImage);
+                                
+                                // 依據所選圖片與玩家比例重新設定大小
+                                const float targetWidth = playerSize.x * m_ExpGemSizeRatioToPlayer;
+                                const float imgScale = targetWidth / selectedImage->GetSize().x;
+                                gem.object->m_Transform.scale = {imgScale, imgScale};
+                                gem.object->SetVisible(true);
+                                break;
+                            }
+                        }
+
+                        // 3% 機率掉落補血道具 (check.png)
+                        if (dropDist(dropRng) < 3.0f) {
+                            for (auto &potion : m_HealthItems) {
+                                if (!potion.active) {
+                                    potion.active = true;
+                                    // 稍微往旁邊偏移一點，避免跟寶石完全重疊
+                                    potion.worldPosition = enemy.worldPosition + glm::vec2(20.0f, 20.0f);
+                                    potion.pickupCooldownTimerMs = 800.0f;
+                                    potion.object->SetVisible(true);
+                                    break;
+                                }
+                            }
+                        }
                     }
                     break; // 飛刀已經銷毀，不需要再檢查其他敵人
                 }
@@ -954,27 +959,74 @@ void App::Update() {
     for (auto& rune : m_Runetracers) {
         if (!rune.active) continue;
 
-        const float runeHitRadius = m_Player->GetScaledSize().x * 0.5f * 0.5f;
+        const float runeHitRadius = playerSize.x * 0.5f * 0.5f;
 
         for (auto* enemyPtr : activeEnemies) {
             auto& enemy = *enemyPtr;
-            if (enemy.active) {
+            if (enemy.active && enemy.hitCooldownTimerMs <= 0.0f) {
                 float enemyCollisionRadius = enemy.object->GetScaledSize().x * 0.35f;
                 float hitRadius = runeHitRadius + enemyCollisionRadius;
 
                 float dx = enemy.worldPosition.x - rune.worldPosition.x;
                 float dy = enemy.worldPosition.y - rune.worldPosition.y;
-                float distSq = dx * dx + dy * dy;
 
-                if (distSq <= hitRadius * hitRadius && enemy.hitCooldownTimerMs <= 0.0f) {
+                if ((dx * dx + dy * dy) <= hitRadius * hitRadius) {
                     enemy.hitCooldownTimerMs = 300.0f; // 擊中冷卻
                     enemy.health -= m_RunetracerDamage;
-                    m_PlayerHealth = std::min(m_PlayerHealth + m_RunetracerDamage * m_PlayerVampirism, m_PlayerMaxHealth);
                     
                     // 符文追蹤者不會因為碰撞而消失 (自帶穿透屬性)
 
                     if (enemy.health <= 0.0f) {
-                        HandleEnemyDeath(enemy);
+                        enemy.active = false;
+                        enemy.object->SetVisible(false);
+
+                        m_EnemiesDefeated++;
+                        m_CurrentWave = (m_EnemiesDefeated / 15) + 1;
+                        m_CurrentStage = (m_CurrentWave - 1) / 5 + 1;
+                        m_EnemySpawnIntervalMs = std::max(200.0f, 1200.0f - static_cast<float>(m_CurrentWave - 1) * 100.0f);
+
+                        static std::mt19937 dropRng(std::random_device{}());
+                        std::uniform_real_distribution<float> dropDist(0.0f, 100.0f);
+                        float dropRoll = dropDist(dropRng);
+
+                        for (auto &gem : m_ExpGems) {
+                            if (!gem.active) {
+                                gem.active = true;
+                                gem.worldPosition = enemy.worldPosition;
+                                gem.pickupCooldownTimerMs = 800.0f;
+                                
+                                std::shared_ptr<Util::Image> selectedImage;
+                                if (dropRoll < 5.0f) {
+                                    gem.expValue = 10;
+                                    selectedImage = m_Gem3Image;
+                                } else if (dropRoll < 20.0f) {
+                                    gem.expValue = 4;
+                                    selectedImage = m_Gem2Image;
+                                } else {
+                                    gem.expValue = 1;
+                                    selectedImage = m_Gem1Image;
+                                }
+                                gem.object->SetDrawable(selectedImage);
+                                
+                                const float targetWidth = playerSize.x * m_ExpGemSizeRatioToPlayer;
+                                const float imgScale = targetWidth / selectedImage->GetSize().x;
+                                gem.object->m_Transform.scale = {imgScale, imgScale};
+                                gem.object->SetVisible(true);
+                                break;
+                            }
+                        }
+
+                        if (dropDist(dropRng) < 3.0f) {
+                            for (auto &potion : m_HealthItems) {
+                                if (!potion.active) {
+                                    potion.active = true;
+                                    potion.worldPosition = enemy.worldPosition + glm::vec2(20.0f, 20.0f);
+                                    potion.pickupCooldownTimerMs = 800.0f;
+                                    potion.object->SetVisible(true);
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -986,20 +1038,10 @@ void App::Update() {
     for (auto &gem : m_ExpGems) {
         if (gem.active) {
             // 計算寶石冷卻，讓玩家有時間看到寶石掉落
-            if (gem.pickupCooldownTimerMs > 0.0f && !gem.isMagnetized) {
+            if (gem.pickupCooldownTimerMs > 0.0f) {
                 gem.pickupCooldownTimerMs -= deltaTimeMs;
             } else {
                 float dist = glm::distance(m_PlayerWorldPosition, gem.worldPosition);
-                
-                if (gem.isMagnetized) {
-                    // 吸住後快速飛向玩家
-                    float moveDist = 1200.0f * (deltaTimeMs / 1000.0f); // 再加快吸取速度
-                    if (moveDist > dist) moveDist = dist;
-                    glm::vec2 toPlayer = glm::normalize(m_PlayerWorldPosition - gem.worldPosition);
-                    gem.worldPosition += toPlayer * moveDist;
-                    dist = glm::distance(m_PlayerWorldPosition, gem.worldPosition);
-                }
-                
                 if (dist <= pickupRadius) {
                     // 給玩家經驗值
                     m_PlayerExp += gem.expValue;
@@ -1010,38 +1052,15 @@ void App::Update() {
                     if (m_PlayerExp >= m_PlayerExpNext) {
                         m_PlayerExp -= m_PlayerExpNext;
                         m_PlayerLevel++;
-                        m_PlayerExpNext = static_cast<int>(m_PlayerExpNext * 1.15f); // 升級需求遞增 (難度1.15倍)
-                        m_PlayerHealth = m_PlayerMaxHealth; // 只要升級就回滿血
-                        
+                        m_PlayerExpNext = static_cast<int>(m_PlayerExpNext * 1.5f); // 升級需求遞增
+                        m_PlayerMaxHealth += 20.0f; // 升級回血並加血量上限
+                        m_PlayerHealth = m_PlayerMaxHealth;
                         m_CurrentState = State::LEVEL_UP; // 切換到升級暫停介面
-                        GenerateUpgradeOptions();
                     }
                 }
             }
             // 更新寶石位置
             gem.object->m_Transform.translation = gem.worldPosition - m_CameraPosition;
-        }
-    }
-
-    // 處理 Boss Reward 的拾取
-    for (auto &reward : m_RewardItems) {
-        if (reward.active) {
-            if (reward.pickupCooldownTimerMs > 0.0f) {
-                reward.pickupCooldownTimerMs -= deltaTimeMs;
-            } else {
-                float dist = glm::distance(m_PlayerWorldPosition, reward.worldPosition);
-                if (dist <= pickupRadius) {
-                    reward.active = false;
-                    reward.object->SetVisible(false);
-                    m_PlayerHealth = m_PlayerMaxHealth;
-                    m_PendingLevelUps += 3;
-                    if (m_CurrentState != State::LEVEL_UP) {
-                        m_CurrentState = State::LEVEL_UP;
-                        GenerateUpgradeOptions();
-                    }
-                }
-            }
-            reward.object->m_Transform.translation = reward.worldPosition - m_CameraPosition;
         }
     }
 
@@ -1059,39 +1078,6 @@ void App::Update() {
                 }
             }
             potion.object->m_Transform.translation = potion.worldPosition - m_CameraPosition;
-        }
-    }
-
-    // 處理磁鐵道具的拾取
-    for (auto &magnet : m_MagnetItems) {
-        if (magnet.active) {
-            if (magnet.pickupCooldownTimerMs > 0.0f) {
-                magnet.pickupCooldownTimerMs -= deltaTimeMs;
-            } else {
-                float dist = glm::distance(m_PlayerWorldPosition, magnet.worldPosition);
-                if (dist <= pickupRadius) {
-                    magnet.active = false;
-                    magnet.object->SetVisible(false);
-                    m_MagnetTimerMs = 5000.0f; // 啟動磁鐵效果 5 秒
-                }
-            }
-            magnet.object->m_Transform.translation = magnet.worldPosition - m_CameraPosition;
-        }
-    }
-
-    // 處理磁鐵持續時間內吸取寶石
-    if (m_MagnetTimerMs > 0.0f) {
-        m_MagnetTimerMs -= deltaTimeMs;
-        float cullDistX = WINDOW_WIDTH * 0.6f;
-        float cullDistY = WINDOW_HEIGHT * 0.6f;
-        for (auto &gem : m_ExpGems) {
-            if (gem.active && !gem.isMagnetized) {
-                float dx = std::abs(gem.worldPosition.x - m_CameraPosition.x);
-                float dy = std::abs(gem.worldPosition.y - m_CameraPosition.y);
-                if (dx <= cullDistX && dy <= cullDistY) {
-                    gem.isMagnetized = true;
-                }
-            }
         }
     }
 
@@ -1271,22 +1257,6 @@ void App::DrawGameObjects() {
             }
         }
     }
-    for (auto &reward : m_RewardItems) {
-        if (reward.active) {
-            if (std::abs(reward.worldPosition.x - m_CameraPosition.x) < cullDistX &&
-                std::abs(reward.worldPosition.y - m_CameraPosition.y) < cullDistY) {
-                reward.object->Draw();
-            }
-        }
-    }
-    for (auto &magnet : m_MagnetItems) {
-        if (magnet.active) {
-            if (std::abs(magnet.worldPosition.x - m_CameraPosition.x) < cullDistX &&
-                std::abs(magnet.worldPosition.y - m_CameraPosition.y) < cullDistY) {
-                magnet.object->Draw();
-            }
-        }
-    }
     for (auto &enemy : m_Enemies) {
         if (enemy.active) {
             if (std::abs(enemy.worldPosition.x - m_CameraPosition.x) < cullDistX &&
@@ -1296,11 +1266,7 @@ void App::DrawGameObjects() {
                 if (enemy.hitCooldownTimerMs > 150.0f) {
                     enemy.object->SetDrawable(enemy.hurtImage);
                 } else {
-                    if (enemy.defaultAnimation) {
-                        enemy.object->SetDrawable(enemy.defaultAnimation);
-                    } else {
-                        enemy.object->SetDrawable(enemy.defaultImage);
-                    }
+                    enemy.object->SetDrawable(enemy.defaultImage);
                 }
                 enemy.object->Draw();
             }
@@ -1361,9 +1327,6 @@ void App::DrawGameObjects() {
 }
 
 void App::UpdatePaused() {
-    if (m_BossLeftAnimation) m_BossLeftAnimation->Pause();
-    if (m_BossRightAnimation) m_BossRightAnimation->Pause();
-    if (m_Player) m_Player->PauseAnimation();
     if (m_BGM) m_BGM->Pause(); // 暫停時音樂也停下
 
     DrawGameObjects(); // 畫出底層但不會更新他們的邏輯，形成暫停效果
@@ -1380,48 +1343,60 @@ void App::UpdatePaused() {
     ImGui::Begin("PausedMenu", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 
     // ==========================================
-    // 左側面板 (遊戲統計數據)
+    // 左側面板 (狀態列表)
     // ==========================================
     ImGui::SetCursorPos(ImVec2(20, 20));
+    // 設定子視窗顏色與框線
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.9f));
-    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.8f, 0.6f, 0.2f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.8f, 0.6f, 0.2f, 1.0f)); // 邊框帶點金色
     ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 2.0f);
     
     ImGui::BeginChild("LeftStatsPanel", ImVec2(280, WINDOW_HEIGHT - 100), true);
-    ImGui::SetWindowFontScale(1.5f);
-    ImGui::TextColored(ImVec4(1, 1, 0, 1), "Game Stats");
-    ImGui::Separator();
-    ImGui::SetWindowFontScale(1.0f);
-    ImGui::Dummy(ImVec2(0, 10));
     
-    int timeMinutes = static_cast<int>(m_GameTimeMs / 60000.0f) % 60;
-    int timeSeconds = static_cast<int>(m_GameTimeMs / 1000.0f) % 60;
-
-    if (ImGui::BeginTable("GameStatsTable", 2, ImGuiTableFlags_None)) {
+    ImGui::TextColored(ImVec4(1, 1, 0, 1), "Player Stats"); // 標題
+    ImGui::Separator();
+    
+    // 使用兩欄的 Table 來對齊屬性名稱與數值
+    if (ImGui::BeginTable("StatsTable", 2, ImGuiTableFlags_None)) {
         ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, 50.0f);
+        
         auto drawStatRow = [](const char* name, const char* val) {
-            ImGui::TableNextRow(); ImGui::TableSetColumnIndex(0); ImGui::Text("%s", name); ImGui::TableSetColumnIndex(1); ImGui::Text("%s", val);
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0); ImGui::Text("%s", name);
+            ImGui::TableSetColumnIndex(1); ImGui::Text("%s", val);
         };
-        char buf[64];
-        snprintf(buf, sizeof(buf), "%02d:%02d", timeMinutes, timeSeconds);
-        drawStatRow("Time", buf); ImGui::Dummy(ImVec2(0, 10));
-        snprintf(buf, sizeof(buf), "%d", m_EnemiesDefeated);
-        drawStatRow("Defeated", buf); ImGui::Dummy(ImVec2(0, 10));
-        snprintf(buf, sizeof(buf), "%d", m_PlayerLevel);
-        drawStatRow("Level", buf); ImGui::Dummy(ImVec2(0, 10));
-        snprintf(buf, sizeof(buf), "%d", m_CurrentWave);
-        drawStatRow("Wave", buf); ImGui::Dummy(ImVec2(0, 10));
-        snprintf(buf, sizeof(buf), "%d", m_CurrentStage);
-        drawStatRow("Stage", buf);
+
+        drawStatRow("Max Health", "100");
+        drawStatRow("Recovery", "+0");
+        drawStatRow("Armor", "+0");
+        drawStatRow("Move Speed", "+0%");
+        ImGui::Separator();
+        drawStatRow("Might", "+0%");
+        drawStatRow("Proj Speed", "+0%");
+        drawStatRow("Duration", "+0%");
+        drawStatRow("Area", "+0%");
+        ImGui::Separator();
+        drawStatRow("Cooldown", "-0%");
+        drawStatRow("Amount", "+0");
+        drawStatRow("Revival", "0");
+        drawStatRow("Magnet", "+0");
+        ImGui::Separator();
+        drawStatRow("Luck", "+0%");
+        drawStatRow("Growth", "+0%");
+        drawStatRow("Greed", "+0%");
+        drawStatRow("Curse", "+0%");
+
         ImGui::EndTable();
     }
     ImGui::EndChild();
+    
+    // 還原左側面板的顏色與框線設定
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(2);
 
     // ==========================================
-    // 右側面板 (玩家能力數值)
+    // 中間面板 (遊戲統計數據 / 取代地圖)
     // ==========================================
     ImGui::SetCursorPos(ImVec2(320, 20)); // 定位到左側欄右邊
     // 設定顏色與金色邊框
@@ -1429,71 +1404,43 @@ void App::UpdatePaused() {
     ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.8f, 0.6f, 0.2f, 1.0f)); // 金色
     ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 2.0f);
 
-    ImGui::BeginChild("RightStatsPanel", ImVec2(WINDOW_WIDTH - 340, WINDOW_HEIGHT - 100), true);
+    ImGui::BeginChild("StatsPanel", ImVec2(WINDOW_WIDTH - 340, WINDOW_HEIGHT - 100), true);
     
     ImGui::SetWindowFontScale(1.5f);
-    ImGui::TextColored(ImVec4(1, 1, 0, 1), "Player Statistics");
+    ImGui::TextColored(ImVec4(1, 1, 0, 1), "Game Statistics");
     ImGui::Separator();
-    ImGui::SetWindowFontScale(1.0f);
-    ImGui::Dummy(ImVec2(0, 10));
+    ImGui::Dummy(ImVec2(0, 20));
 
-    if (ImGui::BeginTable("PlayerStatsTable", 2, ImGuiTableFlags_None)) {
+    // 格式化遊戲時間 (分:秒)
+    int timeMinutes = static_cast<int>(m_GameTimeMs / 60000.0f) % 60;
+    int timeSeconds = static_cast<int>(m_GameTimeMs / 1000.0f) % 60;
+
+    if (ImGui::BeginTable("StatisticsTable", 2, ImGuiTableFlags_None)) {
         ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, 180.0f);
+        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, 150.0f);
         
-        auto drawStatRow = [](const char* name, const std::string& val) {
+        auto drawStatRow = [](const char* name, const char* val) {
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0); ImGui::Text("%s", name);
-            ImGui::TableSetColumnIndex(1); ImGui::Text("%s", val.c_str());
-        };
-        auto drawHeader = [](const char* name, bool locked) {
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::Dummy(ImVec2(0, 10)); // Add some spacing before header
-            ImGui::Separator();
-            if (locked) {
-                ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "%s", name);
-            } else {
-                ImGui::TextColored(ImVec4(0.8f, 0.8f, 1.0f, 1.0f), "%s", name);
-            }
+            ImGui::TableSetColumnIndex(1); ImGui::Text("%s", val);
         };
 
-        drawStatRow("Max Health", std::to_string((int)m_PlayerMaxHealth));
-        if (m_ArmorUnlocked) {
-            drawStatRow("Armor Reduction", std::to_string((int)(m_PlayerArmor * 100)) + "% (Lv " + std::to_string(m_ArmorLevel) + ")");
-        } else {
-            drawStatRow("Armor Reduction", "(Locked)");
-        }
-        if (m_VampirismUnlocked) {
-            char buf[64];
-            snprintf(buf, sizeof(buf), "%.1f%% (Lv %d)", m_PlayerVampirism * 100.0f, m_VampirismLevel);
-            drawStatRow("Lifesteal", buf);
-        } else {
-            drawStatRow("Lifesteal", "(Locked)");
-        }
-        
-        drawHeader("[ Whip ]", false);
-        drawStatRow("Range", std::to_string((int)(m_WeaponHitRadiusRatioToPlayer * 100)) + "% (Lv " + std::to_string(m_WhipRangeLevel) + ")");
-        drawStatRow("Damage", std::to_string((int)m_WeaponDamage) + " (Lv " + std::to_string(m_WhipDamageLevel) + ")");
-        drawStatRow("Cooldown", std::to_string((int)m_WeaponAttackIntervalMs) + "ms (Lv " + std::to_string(m_WhipCooldownLevel) + ")");
-        
-        if (m_KnifeUnlocked) {
-            drawHeader("[ Knife ]", false);
-            drawStatRow("Count", std::to_string(m_KnifeCount) + " (Lv " + std::to_string(m_KnifeCountLevel) + ")");
-            drawStatRow("Damage", std::to_string((int)m_KnifeDamage) + " (Lv " + std::to_string(m_KnifeDamageLevel) + ")");
-            drawStatRow("Cooldown", std::to_string((int)m_KnifeAttackIntervalMs) + "ms (Lv " + std::to_string(m_KnifeCooldownLevel) + ")");
-        } else {
-            drawHeader("[ Knife ] (Locked)", true);
-        }
+        char timeBuf[64], killBuf[64], waveBuf[64], lvlBuf[64], stageBuf[64];
+        snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", timeMinutes, timeSeconds);
+        snprintf(killBuf, sizeof(killBuf), "%d", m_EnemiesDefeated);
+        snprintf(waveBuf, sizeof(waveBuf), "%d", m_CurrentWave);
+        snprintf(lvlBuf, sizeof(lvlBuf), "%d", m_PlayerLevel);
+        snprintf(stageBuf, sizeof(stageBuf), "%d", m_CurrentStage);
 
-        if (m_RunetracerUnlocked) {
-            drawHeader("[ Runetracer ]", false);
-            drawStatRow("Count", std::to_string(m_RunetracerCount) + " (Lv " + std::to_string(m_RunetracerCountLevel) + ")");
-            drawStatRow("Damage", std::to_string((int)m_RunetracerDamage) + " (Lv " + std::to_string(m_RunetracerDamageLevel) + ")");
-            drawStatRow("Cooldown", std::to_string((int)m_RunetracerAttackIntervalMs) + "ms (Lv " + std::to_string(m_RunetracerCooldownLevel) + ")");
-        } else {
-            drawHeader("[ Runetracer ] (Locked)", true);
-        }
+        drawStatRow("Time Survived", timeBuf);
+        ImGui::Dummy(ImVec2(0, 10));
+        drawStatRow("Enemies Defeated", killBuf);
+        ImGui::Dummy(ImVec2(0, 10));
+        drawStatRow("Current Level", lvlBuf);
+        ImGui::Dummy(ImVec2(0, 10));
+        drawStatRow("Current Wave", waveBuf);
+        ImGui::Dummy(ImVec2(0, 10));
+        drawStatRow("Current Stage", stageBuf);
 
         ImGui::EndTable();
     }
@@ -1544,9 +1491,6 @@ void App::UpdatePaused() {
 }
 
 void App::UpdateLevelUp() {
-    if (m_BossLeftAnimation) m_BossLeftAnimation->Pause();
-    if (m_BossRightAnimation) m_BossRightAnimation->Pause();
-    if (m_Player) m_Player->PauseAnimation();
     DrawGameObjects();
 
     // 畫出升級畫面的背景物件
@@ -1568,65 +1512,30 @@ void App::UpdateLevelUp() {
 
     ImGui::Dummy(ImVec2(0, 105)); 
 
-    for (int i = 0; i < m_CurrentUpgradeOptions.size(); ++i) {
-        UpgradeType type = m_CurrentUpgradeOptions[i];
-        std::string buttonText = "";
-        
-        switch (type) {
-            case UpgradeType::UNLOCK_KNIFE: buttonText = "Unlock Knife"; break;
-            case UpgradeType::UNLOCK_RUNETRACER: buttonText = "Unlock Runetracer"; break;
-            case UpgradeType::UNLOCK_ARMOR: buttonText = "Unlock Armor (5%)"; break;
-            case UpgradeType::UNLOCK_VAMPIRISM: buttonText = "Unlock Lifesteal (0.5%)"; break;
-            case UpgradeType::WHIP_RANGE: buttonText = "Whip Range Up (Lv " + std::to_string(m_WhipRangeLevel + 1) + ")"; break;
-            case UpgradeType::WHIP_DAMAGE: buttonText = "Whip Damage Up (Lv " + std::to_string(m_WhipDamageLevel + 1) + ")"; break;
-            case UpgradeType::WHIP_COOLDOWN: buttonText = "Whip Cooldown Down (Lv " + std::to_string(m_WhipCooldownLevel + 1) + ")"; break;
-            case UpgradeType::KNIFE_COUNT: buttonText = "Knife Count +2 (Lv " + std::to_string(m_KnifeCountLevel + 1) + ")"; break;
-            case UpgradeType::KNIFE_DAMAGE: buttonText = "Knife Damage Up (Lv " + std::to_string(m_KnifeDamageLevel + 1) + ")"; break;
-            case UpgradeType::KNIFE_COOLDOWN: buttonText = "Knife Cooldown Down (Lv " + std::to_string(m_KnifeCooldownLevel + 1) + ")"; break;
-            case UpgradeType::RUNETRACER_COUNT: buttonText = "Runetracer Count +1 (Lv " + std::to_string(m_RunetracerCountLevel + 1) + ")"; break;
-            case UpgradeType::RUNETRACER_DAMAGE: buttonText = "Runetracer Damage Up (Lv " + std::to_string(m_RunetracerDamageLevel + 1) + ")"; break;
-            case UpgradeType::RUNETRACER_COOLDOWN: buttonText = "Runetracer Cooldown Down (Lv " + std::to_string(m_RunetracerCooldownLevel + 1) + ")"; break;
-            case UpgradeType::MAX_HEALTH: buttonText = "Max Health +100"; break;
-            case UpgradeType::ARMOR: buttonText = "Armor +5% (Lv " + std::to_string(m_ArmorLevel + 1) + ")"; break;
-            case UpgradeType::VAMPIRISM: buttonText = "Lifesteal +0.5% (Lv " + std::to_string(m_VampirismLevel + 1) + ")"; break;
-        }
+    // 選項 1
+    if (ImGui::Button("Decrease Weapon Cooldown (-10%)", ImVec2(380, 80))) {
+        m_WeaponAttackIntervalMs *= 0.9f;
+        m_CurrentState = State::UPDATE;
+    }
+    
+    ImGui::Dummy(ImVec2(0, 30)); 
+    
+    // 選項 2
+    if (ImGui::Button("Increase Weapon Damage (+10)", ImVec2(380, 80))) {
+        m_WeaponDamage += 10.0f;
+        m_CurrentState = State::UPDATE;
+    }
 
-        if (ImGui::Button(buttonText.c_str(), ImVec2(380, 80))) {
-            switch (type) {
-                case UpgradeType::UNLOCK_KNIFE: m_KnifeUnlocked = true; break;
-                case UpgradeType::UNLOCK_RUNETRACER: m_RunetracerUnlocked = true; break;
-                case UpgradeType::UNLOCK_ARMOR: m_ArmorUnlocked = true; m_PlayerArmor = 0.05f; break;
-                case UpgradeType::UNLOCK_VAMPIRISM: m_VampirismUnlocked = true; m_PlayerVampirism = 0.005f; break;
-                case UpgradeType::WHIP_RANGE: 
-                    m_WhipRangeLevel++;
-                    m_WeaponHitRadiusRatioToPlayer *= 1.20f; 
-                    {
-                        const glm::vec2 weaponNativeSize = m_WeaponEffect.activeAnimation->GetSize();
-                        const float targetWeaponWidth = m_Player->GetScaledSize().x * m_WeaponWidthRatioToPlayer * (m_WeaponHitRadiusRatioToPlayer / 1.0f);
-                        const float weaponScale = targetWeaponWidth / weaponNativeSize.x;
-                        m_WeaponEffect.object->m_Transform.scale = {weaponScale, weaponScale};
-                    }
-                    break;
-                case UpgradeType::WHIP_DAMAGE: m_WhipDamageLevel++; m_WeaponDamage += 15.0f; break;
-                case UpgradeType::WHIP_COOLDOWN: m_WhipCooldownLevel++; m_WeaponAttackIntervalMs *= 0.80f; break;
-                case UpgradeType::KNIFE_COUNT: m_KnifeCountLevel++; m_KnifeCount += 2; break;
-                case UpgradeType::KNIFE_DAMAGE: m_KnifeDamageLevel++; m_KnifeDamage += 15.0f; break;
-                case UpgradeType::KNIFE_COOLDOWN: m_KnifeCooldownLevel++; m_KnifeAttackIntervalMs *= 0.80f; break;
-                case UpgradeType::RUNETRACER_COUNT: m_RunetracerCountLevel++; m_RunetracerCount++; break;
-                case UpgradeType::RUNETRACER_DAMAGE: m_RunetracerDamageLevel++; m_RunetracerDamage += 15.0f; break;
-                case UpgradeType::RUNETRACER_COOLDOWN: m_RunetracerCooldownLevel++; m_RunetracerAttackIntervalMs *= 0.80f; break;
-                case UpgradeType::MAX_HEALTH: m_MaxHealthLevel++; m_PlayerMaxHealth += 100.0f; m_PlayerHealth += 100.0f; break;
-                case UpgradeType::ARMOR: m_ArmorLevel++; m_PlayerArmor += 0.05f; break; // 5% reduction per level
-                case UpgradeType::VAMPIRISM: m_VampirismLevel++; m_PlayerVampirism += 0.005f; break; // 0.5% lifesteal per level
-            }
-            if (m_PendingLevelUps > 0) {
-                m_PendingLevelUps--;
-                GenerateUpgradeOptions();
-            } else {
-                m_CurrentState = State::UPDATE;
-            }
-        }
-        ImGui::Dummy(ImVec2(0, 30)); 
+    ImGui::Dummy(ImVec2(0, 30)); 
+    
+    // 選項 3
+    if (ImGui::Button("Increase Weapon Range (+10%)", ImVec2(380, 80))) {
+        m_WeaponHitRadiusRatioToPlayer *= 1.1f;
+        const glm::vec2 weaponNativeSize = m_WeaponEffect.activeAnimation->GetSize();
+        const float targetWeaponWidth = m_Player->GetScaledSize().x * m_WeaponWidthRatioToPlayer * (m_WeaponHitRadiusRatioToPlayer / 1.0f); // 配合打擊範圍放大特效
+        const float weaponScale = targetWeaponWidth / weaponNativeSize.x;
+        m_WeaponEffect.object->m_Transform.scale = {weaponScale, weaponScale};
+        m_CurrentState = State::UPDATE;
     }
 
     ImGui::End();
@@ -1640,303 +1549,41 @@ void App::UpdateLevelUp() {
     }
 }
 
-void App::GenerateUpgradeOptions() {
-    m_CurrentUpgradeOptions.clear();
-    std::vector<UpgradeType> validPool;
-    
-    if (!m_KnifeUnlocked) validPool.push_back(UpgradeType::UNLOCK_KNIFE);
-    if (!m_RunetracerUnlocked) validPool.push_back(UpgradeType::UNLOCK_RUNETRACER);
-    
-    if (m_WhipRangeLevel < 15) validPool.push_back(UpgradeType::WHIP_RANGE);
-    if (m_WhipDamageLevel < 15) validPool.push_back(UpgradeType::WHIP_DAMAGE);
-    if (m_WhipCooldownLevel < 15) validPool.push_back(UpgradeType::WHIP_COOLDOWN);
-    
-    if (m_KnifeUnlocked) {
-        if (m_KnifeCountLevel < 15) validPool.push_back(UpgradeType::KNIFE_COUNT);
-        if (m_KnifeDamageLevel < 15) validPool.push_back(UpgradeType::KNIFE_DAMAGE);
-        if (m_KnifeCooldownLevel < 15) validPool.push_back(UpgradeType::KNIFE_COOLDOWN);
-    }
-    
-    if (m_RunetracerUnlocked) {
-        if (m_RunetracerCountLevel < 15) validPool.push_back(UpgradeType::RUNETRACER_COUNT);
-        if (m_RunetracerDamageLevel < 15) validPool.push_back(UpgradeType::RUNETRACER_DAMAGE);
-        if (m_RunetracerCooldownLevel < 15) validPool.push_back(UpgradeType::RUNETRACER_COOLDOWN);
-    }
-    
-    if (m_MaxHealthLevel < 15) validPool.push_back(UpgradeType::MAX_HEALTH);
-    if (!m_ArmorUnlocked) validPool.push_back(UpgradeType::UNLOCK_ARMOR);
-    else if (m_ArmorLevel < 15) validPool.push_back(UpgradeType::ARMOR);
-    
-    if (!m_VampirismUnlocked) validPool.push_back(UpgradeType::UNLOCK_VAMPIRISM);
-    else if (m_VampirismLevel < 15) validPool.push_back(UpgradeType::VAMPIRISM);
-    
-    if (validPool.empty()) {
-        validPool.push_back(UpgradeType::MAX_HEALTH);
-    }
-
-    std::random_device rd;
-    std::mt19937 g(rd());
-    std::shuffle(validPool.begin(), validPool.end(), g);
-    
-    for (int i = 0; i < std::min((int)validPool.size(), 3); ++i) {
-        m_CurrentUpgradeOptions.push_back(validPool[i]);
-    }
-}
-
-
 void App::UpdateGameOver() {
-    if (m_BossLeftAnimation) m_BossLeftAnimation->Pause();
-    if (m_BossRightAnimation) m_BossRightAnimation->Pause();
-    if (m_Player) m_Player->PauseAnimation();
     DrawGameObjects();
 
-    ImDrawList* bgDrawList = ImGui::GetBackgroundDrawList();
-    bgDrawList->AddRectFilled(ImVec2(0, 0), ImVec2(WINDOW_WIDTH, WINDOW_HEIGHT), IM_COL32(150, 0, 0, 150));
+    ImGui::SetNextWindowPos(ImVec2(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT / 2.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(300, 200), ImGuiCond_Always);
+    ImGui::Begin("Game Over", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
 
-    if (m_GameOverImage && m_GameOverImage->GetTextureId() != 0) {
-        ImVec2 texSize(m_GameOverImage->GetSize().x, m_GameOverImage->GetSize().y);
-        ImVec2 pos((WINDOW_WIDTH - texSize.x) * 0.5f, 50.0f);
-        bgDrawList->AddImage((void*)(intptr_t)m_GameOverImage->GetTextureId(), pos, ImVec2(pos.x + texSize.x, pos.y + texSize.y));
-    }
+    ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "YOU DIED");
+    ImGui::Text("Level Reached:     %d", m_PlayerLevel);
+    ImGui::Text("Stage Reached:     %d", m_CurrentStage);
+    ImGui::Text("Enemies Defeated:  %d", m_EnemiesDefeated);
+    ImGui::Text("Waves Survived:    %d", m_CurrentWave);
 
-    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(WINDOW_WIDTH, WINDOW_HEIGHT), ImGuiCond_Always);
-    ImGui::Begin("GameOverMenu", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-
-    ImGui::SetCursorPos(ImVec2(20, 250));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.9f));
-    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.8f, 0.6f, 0.2f, 1.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 2.0f);
-    
-    ImGui::BeginChild("LeftStatsPanel", ImVec2(280, WINDOW_HEIGHT - 350), true);
-    ImGui::SetWindowFontScale(1.5f);
-    ImGui::TextColored(ImVec4(1, 1, 0, 1), "Game Stats");
-    ImGui::Separator();
-    ImGui::SetWindowFontScale(1.0f);
-    ImGui::Dummy(ImVec2(0, 10));
-    
+    int timeHours = static_cast<int>(m_GameTimeMs / 3600000.0f);
     int timeMinutes = static_cast<int>(m_GameTimeMs / 60000.0f) % 60;
     int timeSeconds = static_cast<int>(m_GameTimeMs / 1000.0f) % 60;
-
-    if (ImGui::BeginTable("GameStatsTable", 2, ImGuiTableFlags_None)) {
-        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-        auto drawStatRow = [](const char* name, const char* val) {
-            ImGui::TableNextRow(); ImGui::TableSetColumnIndex(0); ImGui::Text("%s", name); ImGui::TableSetColumnIndex(1); ImGui::Text("%s", val);
-        };
-        char buf[64];
-        snprintf(buf, sizeof(buf), "%02d:%02d", timeMinutes, timeSeconds);
-        drawStatRow("Time", buf); ImGui::Dummy(ImVec2(0, 10));
-        snprintf(buf, sizeof(buf), "%d", m_EnemiesDefeated);
-        drawStatRow("Defeated", buf); ImGui::Dummy(ImVec2(0, 10));
-        snprintf(buf, sizeof(buf), "%d", m_PlayerLevel);
-        drawStatRow("Level", buf); ImGui::Dummy(ImVec2(0, 10));
-        snprintf(buf, sizeof(buf), "%d", m_CurrentWave);
-        drawStatRow("Wave", buf); ImGui::Dummy(ImVec2(0, 10));
-        snprintf(buf, sizeof(buf), "%d", m_CurrentStage);
-        drawStatRow("Stage", buf);
-        ImGui::EndTable();
-    }
-    ImGui::EndChild();
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(2);
-
-    ImGui::SetCursorPos(ImVec2(320, 250));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.9f));
-    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.8f, 0.6f, 0.2f, 1.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 2.0f);
-
-    ImGui::BeginChild("RightStatsPanel", ImVec2(WINDOW_WIDTH - 340, WINDOW_HEIGHT - 350), true);
     
-    ImGui::SetWindowFontScale(1.5f);
-    ImGui::TextColored(ImVec4(1, 1, 0, 1), "Player Statistics");
+    // 一律顯示 時:分:秒
+    ImGui::Text("Time Survived:     %02d:%02d:%02d", timeHours, timeMinutes, timeSeconds);
+    
     ImGui::Separator();
-    ImGui::SetWindowFontScale(1.0f);
-    ImGui::Dummy(ImVec2(0, 10));
+    ImGui::Dummy(ImVec2(0, 20));
 
-    if (ImGui::BeginTable("PlayerStatsTable", 2, ImGuiTableFlags_None)) {
-        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, 180.0f);
-        
-        auto drawStatRow = [](const char* name, const std::string& val) {
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0); ImGui::Text("%s", name);
-            ImGui::TableSetColumnIndex(1); ImGui::Text("%s", val.c_str());
-        };
-        auto drawHeader = [](const char* name, bool locked) {
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::Dummy(ImVec2(0, 10));
-            ImGui::Separator();
-            if (locked) {
-                ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "%s", name);
-            } else {
-                ImGui::TextColored(ImVec4(0.8f, 0.8f, 1.0f, 1.0f), "%s", name);
-            }
-        };
-
-        drawStatRow("Max Health", std::to_string((int)m_PlayerMaxHealth));
-        if (m_ArmorUnlocked) {
-            drawStatRow("Armor Reduction", std::to_string((int)(m_PlayerArmor * 100)) + "% (Lv " + std::to_string(m_ArmorLevel) + ")");
-        } else {
-            drawStatRow("Armor Reduction", "(Locked)");
-        }
-        if (m_VampirismUnlocked) {
-            char buf[64];
-            snprintf(buf, sizeof(buf), "%.1f%% (Lv %d)", m_PlayerVampirism * 100.0f, m_VampirismLevel);
-            drawStatRow("Lifesteal", buf);
-        } else {
-            drawStatRow("Lifesteal", "(Locked)");
-        }
-        
-        drawHeader("[ Whip ]", false);
-        drawStatRow("Range", std::to_string((int)(m_WeaponHitRadiusRatioToPlayer * 100)) + "% (Lv " + std::to_string(m_WhipRangeLevel) + ")");
-        drawStatRow("Damage", std::to_string((int)m_WeaponDamage) + " (Lv " + std::to_string(m_WhipDamageLevel) + ")");
-        drawStatRow("Cooldown", std::to_string((int)m_WeaponAttackIntervalMs) + "ms (Lv " + std::to_string(m_WhipCooldownLevel) + ")");
-        
-        if (m_KnifeUnlocked) {
-            drawHeader("[ Knife ]", false);
-            drawStatRow("Count", std::to_string(m_KnifeCount) + " (Lv " + std::to_string(m_KnifeCountLevel) + ")");
-            drawStatRow("Damage", std::to_string((int)m_KnifeDamage) + " (Lv " + std::to_string(m_KnifeDamageLevel) + ")");
-            drawStatRow("Cooldown", std::to_string((int)m_KnifeAttackIntervalMs) + "ms (Lv " + std::to_string(m_KnifeCooldownLevel) + ")");
-        } else {
-            drawHeader("[ Knife ] (Locked)", true);
-        }
-
-        if (m_RunetracerUnlocked) {
-            drawHeader("[ Runetracer ]", false);
-            drawStatRow("Count", std::to_string(m_RunetracerCount) + " (Lv " + std::to_string(m_RunetracerCountLevel) + ")");
-            drawStatRow("Damage", std::to_string((int)m_RunetracerDamage) + " (Lv " + std::to_string(m_RunetracerDamageLevel) + ")");
-            drawStatRow("Cooldown", std::to_string((int)m_RunetracerAttackIntervalMs) + "ms (Lv " + std::to_string(m_RunetracerCooldownLevel) + ")");
-        } else {
-            drawHeader("[ Runetracer ] (Locked)", true);
-        }
-
-        ImGui::EndTable();
-    }
-    
-    ImGui::SetWindowFontScale(1.0f);
-    ImGui::EndChild();
-    
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(2);
-
-    float buttonY = WINDOW_HEIGHT - 70;
-    
-    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.8f, 0.6f, 0.2f, 1.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 2.0f);
-    
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.1f, 0.1f, 1.0f));
-    ImGui::SetCursorPos(ImVec2(20, buttonY));
-    if (ImGui::Button("EXIT", ImVec2(150, 40))) {
-        m_CurrentState = State::END;
-    }
-    ImGui::PopStyleColor();
-
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.1f, 0.3f, 0.8f, 1.0f)); 
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.2f, 1.0f));
-    
-    ImGui::SetCursorPos(ImVec2(WINDOW_WIDTH - 220, buttonY));
-    if (ImGui::Button("RESTART", ImVec2(200, 40))) {
+    if (ImGui::Button("Restart", ImVec2(280, 50))) {
         m_CurrentState = State::START;
     }
-    ImGui::PopStyleColor(2);
-    
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor();
+
+    if (ImGui::Button("Exit", ImVec2(280, 50))) {
+        m_CurrentState = State::END;
+    }
 
     ImGui::End();
 
     if (Util::Input::IsKeyUp(Util::Keycode::ESCAPE) || Util::Input::IfExit()) {
         m_CurrentState = State::END;
-    }
-}
-
-void App::HandleEnemyDeath(EnemyUnit& enemy) {
-    enemy.active = false;
-    enemy.object->SetVisible(false);
-
-    m_EnemiesDefeated++;
-    if (m_EnemiesDefeated >= m_KillsToNextWave) {
-        m_CurrentWave++;
-        // 前期很快升級波次，後期需求擊殺數越來越多
-        int nextRequirement = 10 + (m_CurrentWave - 1) * 5;
-        m_KillsToNextWave += nextRequirement;
-        m_CurrentStage = (m_CurrentWave - 1) / 5 + 1;
-        // 後期怪物生成數量加多
-        m_EnemySpawnIntervalMs = std::max(50.0f, 1200.0f - static_cast<float>(m_CurrentWave - 1) * 150.0f);
-    }
-
-    static std::mt19937 dropRng(std::random_device{}());
-    std::uniform_real_distribution<float> dropDist(0.0f, 100.0f);
-    float dropRoll = dropDist(dropRng);
-
-    if (enemy.isBoss) {
-        for (auto &reward : m_RewardItems) {
-            if (!reward.active) {
-                reward.active = true;
-                reward.worldPosition = enemy.worldPosition;
-                reward.pickupCooldownTimerMs = 150.0f;
-                reward.object->SetVisible(true);
-                break;
-            }
-        }
-    }
-
-    // 掉落經驗值寶石 (依機率決定掉落哪一種)
-    for (auto &gem : m_ExpGems) {
-        if (!gem.active) {
-            gem.active = true;
-            gem.worldPosition = enemy.worldPosition;
-            gem.pickupCooldownTimerMs = 150.0f;
-            gem.isMagnetized = false; // 重置磁吸狀態
-            
-            std::shared_ptr<Util::Image> selectedImage;
-            if (dropRoll < 5.0f) {
-                gem.expValue = 10;
-                selectedImage = m_Gem3Image;
-            } else if (dropRoll < 20.0f) {
-                gem.expValue = 4;
-                selectedImage = m_Gem2Image;
-            } else {
-                gem.expValue = 1;
-                selectedImage = m_Gem1Image;
-            }
-            
-            gem.object->SetDrawable(selectedImage);
-            
-            const float targetWidth = m_Player->GetScaledSize().x * m_ExpGemSizeRatioToPlayer;
-            const float imgScale = targetWidth / selectedImage->GetSize().x;
-            gem.object->m_Transform.scale = {imgScale, imgScale};
-            gem.object->SetVisible(true);
-            break;
-        }
-    }
-
-    // 3% 機率掉落補血道具 (check.png)
-    if (dropDist(dropRng) < 3.0f) {
-        for (auto &potion : m_HealthItems) {
-            if (!potion.active) {
-                potion.active = true;
-                potion.worldPosition = enemy.worldPosition + glm::vec2(20.0f, 20.0f);
-                potion.pickupCooldownTimerMs = 150.0f;
-                potion.object->SetVisible(true);
-                break;
-            }
-        }
-    }
-
-    // 3% 機率掉落磁鐵道具 (magnet.png)
-    if (dropDist(dropRng) < 3.0f) {
-        for (auto &magnet : m_MagnetItems) {
-            if (!magnet.active) {
-                magnet.active = true;
-                magnet.worldPosition = enemy.worldPosition + glm::vec2(-20.0f, -20.0f);
-                magnet.pickupCooldownTimerMs = 150.0f;
-                magnet.object->SetVisible(true);
-                break;
-            }
-        }
     }
 }
 

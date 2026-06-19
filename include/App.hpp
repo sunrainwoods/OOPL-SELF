@@ -30,6 +30,7 @@ struct EnemyUnit {
     float damage = 10.0f; // 怪物攻擊力
     float hitCooldownTimerMs = 0.0f; // 被打到的無敵冷卻時間
     std::shared_ptr<Util::Image> defaultImage; // 原始怪物的圖片
+    std::shared_ptr<Util::Animation> defaultAnimation; // 若有動畫則使用
     std::shared_ptr<Util::Image> hurtImage;    // 全白怪物的圖片
     bool isBoss = false;
 };
@@ -40,6 +41,7 @@ struct ExpGem {
     bool active = false;
     int expValue = 1;
     float pickupCooldownTimerMs = 0.0f; // 避免剛掉落就被吃掉的冷卻時間
+    bool isMagnetized = false; // 是否被磁鐵吸住
 };
 
 struct HealthItem {
@@ -47,6 +49,20 @@ struct HealthItem {
     glm::vec2 worldPosition = {0.0f, 0.0f};
     bool active = false;
     float pickupCooldownTimerMs = 0.0f; // 避免剛掉落就被吃掉的冷卻時間
+};
+
+struct MagnetItem {
+    std::shared_ptr<Util::GameObject> object;
+    glm::vec2 worldPosition = {0.0f, 0.0f};
+    bool active = false;
+    float pickupCooldownTimerMs = 0.0f;
+};
+
+struct RewardItem {
+    std::shared_ptr<Util::GameObject> object;
+    glm::vec2 worldPosition = {0.0f, 0.0f};
+    bool active = false;
+    float pickupCooldownTimerMs = 0.0f;
 };
 
 struct Knife {
@@ -93,6 +109,10 @@ public:
     void UpdateGameOver();
     void UpdatePaused();
     void DrawGameObjects();
+    void GenerateUpgradeOptions();
+    void HandleEnemyDeath(EnemyUnit& enemy);
+
+    void drawStatRow(const std::string& name, const std::string& value);
 
     void End(); // NOLINT(readability-convert-member-functions-to-static)
 
@@ -121,6 +141,55 @@ private:
     std::string m_GroundPath;
     glm::vec2 m_BackgroundTileSize = {1.0f, 1.0f};
 
+    enum class UpgradeType {
+        UNLOCK_KNIFE,
+        UNLOCK_RUNETRACER,
+        WHIP_RANGE,
+        WHIP_DAMAGE,
+        WHIP_COOLDOWN,
+        KNIFE_COUNT,
+        KNIFE_DAMAGE,
+        KNIFE_COOLDOWN,
+        RUNETRACER_COUNT,
+        RUNETRACER_DAMAGE,
+        RUNETRACER_COOLDOWN,
+        MAX_HEALTH,
+        ARMOR,
+        VAMPIRISM,
+        UNLOCK_ARMOR,
+        UNLOCK_VAMPIRISM
+    };
+
+    // Upgrade Levels (Max 15)
+    int m_WhipRangeLevel = 1;
+    int m_WhipDamageLevel = 1;
+    int m_WhipCooldownLevel = 1;
+    
+    int m_KnifeCountLevel = 1;
+    int m_KnifeDamageLevel = 1;
+    int m_KnifeCooldownLevel = 1;
+    
+    int m_RunetracerCountLevel = 1;
+    int m_RunetracerDamageLevel = 1;
+    int m_RunetracerCooldownLevel = 1;
+    
+    int m_MaxHealthLevel = 1;
+    int m_ArmorLevel = 1;
+    int m_VampirismLevel = 1;
+
+    std::vector<UpgradeType> m_CurrentUpgradeOptions;
+
+    // 解鎖狀態
+    bool m_WhipUnlocked = true;
+    bool m_KnifeUnlocked = false;
+    bool m_RunetracerUnlocked = false;
+    bool m_ArmorUnlocked = false;
+    bool m_VampirismUnlocked = false;
+
+    // 玩家狀態
+    float m_PlayerArmor = 0.0f; // 百分比減傷 (0.0f ~ 1.0f)
+    float m_PlayerVampirism = 0.0f; // 造成傷害吸血比例 (0.0f ~ 1.0f)
+
     WeaponEffect m_WeaponEffect;
     bool m_IsFacingLeft = false;
     float m_WeaponAttackTimerMs = 0.0f;
@@ -129,6 +198,7 @@ private:
     // 飛刀武器相關變數
     std::vector<Knife> m_Knives;
     int m_MaxKnives = 50;
+    int m_KnifeCount = 1;
     std::shared_ptr<Util::Image> m_KnifeImage;
     float m_KnifeAttackIntervalMs = 800.0f;
     float m_KnifeAttackTimerMs = 0.0f;
@@ -138,7 +208,8 @@ private:
 
     // 符文追蹤者武器相關變數
     std::vector<Runetracer> m_Runetracers;
-    int m_MaxRunetracers = 30;
+    int m_MaxRunetracers = 50;
+    int m_RunetracerCount = 1;
     std::shared_ptr<Util::Image> m_RunetracerImage;
     std::shared_ptr<Util::Image> m_RunetracerImage95;
     std::shared_ptr<Util::Image> m_RunetracerImage80;
@@ -161,8 +232,8 @@ private:
     float m_EnemySpawnTimerMs = 0.0f;
     float m_EnemySpawnIntervalMs = 1200.0f;
     int m_MaxEnemies = 5000; // 擴大預設的池容量上限，配合壓力測試
-    float m_EnemySpawnMinDistance = 450.0f;
-    float m_EnemySpawnMaxDistance = 850.0f;
+    float m_EnemySpawnMinDistance = 850.0f;
+    float m_EnemySpawnMaxDistance = 1200.0f;
     float m_EnemyMoveSpeed = 0.12f;
     float m_EnemyWidthRatioToPlayer = 0.85f;
     float m_WeaponDamage = 70.0f; // 提升近戰揮砍傷害加快節奏
@@ -171,6 +242,7 @@ private:
     int m_EnemiesDefeated = 0; // 記錄擊殺數
     int m_CurrentWave = 1;     // 波次系統
     int m_CurrentStage = 1;    // 關卡系統
+    int m_KillsToNextWave = 10; // 動態波次需求擊殺數
     float m_GameTimeMs = 0.0f; // 遊戲經過時間
     int m_LastSpecialWaveTriggered = 0; // 紀錄已觸發的小王波數
 
@@ -180,6 +252,17 @@ private:
     std::vector<HealthItem> m_HealthItems;
     int m_MaxHealthItems = 20;
 
+    std::vector<MagnetItem> m_MagnetItems;
+    int m_MaxMagnetItems = 20;
+    std::shared_ptr<Util::Image> m_MagnetImage;
+    float m_MagnetTimerMs = 0.0f;
+
+    std::vector<RewardItem> m_RewardItems;
+    int m_MaxRewardItems = 10;
+    std::shared_ptr<Util::Image> m_RewardImage;
+
+    int m_PendingLevelUps = 0;
+
     std::shared_ptr<Util::Image> m_Enemy1Image;
     std::shared_ptr<Util::Image> m_Enemy1HurtImage;
     std::shared_ptr<Util::Image> m_Enemy2Image;
@@ -188,8 +271,9 @@ private:
     std::shared_ptr<Util::Image> m_Enemy3HurtImage;
     std::shared_ptr<Util::Image> m_Enemy4Image;
     std::shared_ptr<Util::Image> m_Enemy4HurtImage;
-    std::shared_ptr<Util::Image> m_BossLeftImage;
-    std::shared_ptr<Util::Image> m_BossRightImage;
+    std::shared_ptr<Util::Image> m_GameOverImage;
+    std::shared_ptr<Util::Animation> m_BossLeftAnimation;
+    std::shared_ptr<Util::Animation> m_BossRightAnimation;
     std::shared_ptr<Util::Image> m_BossHurtLeftImage;
     std::shared_ptr<Util::Image> m_BossHurtRightImage;
 

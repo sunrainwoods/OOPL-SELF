@@ -43,6 +43,16 @@ public:
         }
     }
 
+    void PauseAnimation() {
+        m_RightWalkAnimation->Pause();
+        m_LeftWalkAnimation->Pause();
+    }
+
+    void PlayAnimation() {
+        m_RightWalkAnimation->Play();
+        m_LeftWalkAnimation->Play();
+    }
+
 private:
     std::shared_ptr<Util::Image> m_RightImage;
     std::shared_ptr<Util::Image> m_LeftImage;
