@@ -1,9 +1,37 @@
 set(SRC_FILES
     App.cpp
+    Camera.cpp
+    Player.cpp
+    Background.cpp
+    Enemy.cpp
+    EnemyManager.cpp
+    Weapon.cpp
+    Whip.cpp
+    KnifeWeapon.cpp
+    RunetracerWeapon.cpp
+    WeaponManager.cpp
+    DropManager.cpp
+    UpgradeManager.cpp
+    UIManager.cpp
 )
 
 set(INCLUDE_FILES
     App.hpp
+    Types.hpp
+    Camera.hpp
+    Player.hpp
+    Background.hpp
+    Enemy.hpp
+    EnemyManager.hpp
+    Weapon.hpp
+    Whip.hpp
+    KnifeWeapon.hpp
+    RunetracerWeapon.hpp
+    WeaponManager.hpp
+    DropItem.hpp
+    DropManager.hpp
+    UpgradeManager.hpp
+    UIManager.hpp
 )
 
 set(TEST_FILES
